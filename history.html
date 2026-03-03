@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learning History - GrowLog</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">🚀 GrowLog</div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="nav-link">📊 Dashboard</a>
+                <a href="log.html" class="nav-link">➕ Add Learning</a>
+                <a href="history.html" class="nav-link active">📋 History</a>
+                <a href="settings.html" class="nav-link">⚙️ Settings</a>
+                <a href="index.html" class="nav-link">🏠 Home</a>
+                <a href="index.html#features" class="nav-link">✨ Features</a>
+                <a href="index.html#about" class="nav-link">ℹ️ About</a>
+                <a href="#" class="nav-link" onclick="logout()">🚪 Logout</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content history-page">
+            <!-- Header with User Profile -->
+            <div class="header-top-bar">
+                <div class="header-left">
+                </div>
+                <div class="header-right">
+                    <button class="theme-toggle-home theme-toggle-global" onclick="toggleTheme()" title="Toggle dark/light theme">
+                        <span class="theme-icon">🌙</span>
+                    </button>
+                    <div class="user-profile-wrapper">
+                        <button class="user-avatar-btn" onclick="toggleUserDropdown(event)">
+                            <span class="user-avatar-icon">👤</span>
+                        </button>
+                        <!-- User Profile Dropdown -->
+                        <div class="user-dropdown" id="userDropdown" style="display: none;">
+                            <div class="dropdown-header">
+                                <div class="user-info">
+                                    <span class="user-name" id="dropdownUserName">User</span>
+                                    <span class="user-email" id="dropdownUserEmail">user@email.com</span>
+                                </div>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-content">
+                                <a href="#" class="dropdown-item" onclick="openUserSettings(event)">
+                                    <span class="item-icon">⚙️</span>
+                                    <span class="item-text">User Settings</span>
+                                </a>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <button class="dropdown-item logout-item" onclick="logout()">
+                                <span class="item-icon">🚪</span>
+                                <span class="item-text">Logout</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Header -->
+            <header class="page-header">
+                <div class="header-content">
+                    <h1>📚 Learning History</h1>
+                    <p class="header-subtitle">Track all your learning journey</p>
+                </div>
+            </header>
+
+            <!-- Filter Section -->
+            <section class="filter-section">
+                <div class="filter-wrapper">
+                    <label for="categoryFilter">Filter by Category:</label>
+                    <select id="categoryFilter">
+                        <option value="All">All Categories</option>
+                        <option value="DSA">🔷 DSA</option>
+                        <option value="Web">🌐 Web Development</option>
+                        <option value="ML">🤖 Machine Learning</option>
+                        <option value="Other">📌 Other</option>
+                    </select>
+                </div>
+                <div class="sort-info">
+                    <span id="logCount" class="log-count">0 logs</span>
+                </div>
+            </section>
+
+            <!-- Learning Logs -->
+            <section class="history-section">
+                <div class="logs-container" id="logsContainer">
+                    <div class="empty-state">
+                        <img src="assets/No%20Data%20Yet.png" alt="No learning data yet" class="empty-state-image">
+                        <div class="empty-icon">📖</div>
+                        <p class="empty-message">No learning logs yet.</p>
+                        <p class="empty-submessage">Start your learning journey today!</p>
+                        <a href="log.html" class="btn-start-logging">Start Logging →</a>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

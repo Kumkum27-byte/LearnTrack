@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GrowLog - Track Your Growth & Learning Journey</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        // Set theme immediately to prevent flash
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="landing-container">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="logo">🚀 GrowLog</div>
+            <div class="nav-links">
+                <a href="index.html">Home</a>
+                <a href="#features">Features</a>
+                <a href="#about">About</a>
+                <a href="#community">Join Our Community</a>
+                <a href="login.html" class="btn-nav-login">Log In</a>
+                <a href="signup.html" class="btn-nav-signup">Sign Up</a>
+            </div>
+            <button class="theme-toggle-home" id="themeToggleHome" onclick="toggleTheme()" title="Toggle dark/light theme">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </nav>
+
+        <!-- Main Hero Section (New Design) -->
+        <section class="main-hero-v3">
+            <div class="main-hero-v3-inner">
+                <div class="main-hero-v3-copy">
+                    <div class="hero-kicker">✨ Build your learning habit</div>
+                    <h1>Your <span>Personal Learning</span> Companion</h1>
+                    <p>Log what you learn, track streaks, plan upcoming study sessions, and monitor progress with clear analytics—everything in one simple dashboard.</p>
+
+                    <div class="main-hero-v3-cta">
+                        <a href="signup.html" class="btn btn-primary">🚀 Start Learning Today</a>
+                        <a href="#features" class="btn btn-secondary">Learn More</a>
+                    </div>
+
+                    <ul class="main-hero-v3-points">
+                        <li>✨ Daily logs + streak tracking</li>
+                        <li>📊 Analytics dashboard + calendar planner</li>
+                        <li>🔒 Free, open source, and theme-ready</li>
+                    </ul>
+                </div>
+
+                <div class="main-hero-v3-visual">
+                    <div class="main-hero-v3-image-card">
+                        <img src="assets/Main%20Hero%20Illustration.png" alt="GrowLog learning hero illustration" class="main-hero-v3-image">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section id="features" class="features-section landing-section">
+            <div class="section-header">
+                <h2>Everything You Need to Learn Consistently</h2>
+                <p>Designed around the exact tools inside GrowLog: logging, streaks, analytics, planning, goals, and history.</p>
+            </div>
+
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon-circle">
+                        <span class="feature-icon-glyph" aria-hidden="true">📝</span>
+                    </div>
+                    <h3>Daily Learning Log</h3>
+                    <p>Record topic, category, duration, date, and reflection in one quick form.</p>
+                    <div class="feature-benefit">✓ Structured entries, every day</div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon-circle">
+                        <span class="feature-icon-glyph" aria-hidden="true">🔥</span>
+                    </div>
+                    <h3>Streak Tracking</h3>
+                    <p>Track current streak, longest streak, active days, and total hours automatically.</p>
+                    <div class="feature-benefit">✓ Built-in consistency motivation</div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon-circle">
+                        <span class="feature-icon-glyph" aria-hidden="true">📊</span>
+                    </div>
+                    <h3>Analytics Dashboard</h3>
+                    <p>View heatmaps, weekly trend charts, and category distribution in real time.</p>
+                    <div class="feature-benefit">✓ Clear, visual progress insights</div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon-circle">
+                        <span class="feature-icon-glyph" aria-hidden="true">🎯</span>
+                    </div>
+                    <h3>Goals & Planning</h3>
+                    <p>Manage learning goals, daily plans, and checklist progress from the dashboard.</p>
+                    <div class="feature-benefit">✓ Turn plans into completed work</div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon-circle">
+                        <span class="feature-icon-glyph" aria-hidden="true">💡</span>
+                    </div>
+                    <h3>Schedule Planner</h3>
+                    <p>Use the integrated calendar to add upcoming study tasks and stay on track.</p>
+                    <div class="feature-benefit">✓ Plan ahead with dates and times</div>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon-circle">
+                        <span class="feature-icon-glyph" aria-hidden="true">🤝</span>
+                    </div>
+                    <h3>History, Filters & Settings</h3>
+                    <p>Review past logs, filter by category, and personalize the app with theme/settings.</p>
+                    <div class="feature-benefit">✓ Full control over your learning data</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <section class="how-it-works landing-section">
+            <div class="section-header">
+                <h2>How It Works</h2>
+                <p>Get started in 3 simple steps</p>
+            </div>
+
+            <div class="how-visual">
+                <img src="assets/How%20It%20Works.png" alt="How GrowLog works in three steps" class="section-showcase-image">
+            </div>
+
+            <div class="steps-container">
+                <div class="step">
+                    <div class="step-number">01</div>
+                    <h3>Create Account</h3>
+                    <p>Sign up with your email in seconds</p>
+                </div>
+                <div class="step-arrow">→</div>
+                <div class="step">
+                    <div class="step-number">02</div>
+                    <h3>Log Your Learning</h3>
+                    <p>Record what you studied each day</p>
+                </div>
+                <div class="step-arrow">→</div>
+                <div class="step">
+                    <div class="step-number">03</div>
+                    <h3>Track Progress</h3>
+                    <p>Watch your streaks and achievements grow</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats Section -->
+        <section class="stats-section landing-section">
+            <h2>Join Thousands of Learners</h2>
+            <div class="stats-visual">
+                <img src="assets/StatsSocial%20Proof.png" alt="Community stats and social proof visual" class="section-showcase-image">
+            </div>
+            <div class="stats-container">
+                <div class="stat-item">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-content">
+                        <div class="stat-value">500+</div>
+                        <div class="stat-label">Active Learners</div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-icon">📚</div>
+                    <div class="stat-content">
+                        <div class="stat-value">5000+</div>
+                        <div class="stat-label">Logs Created</div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-icon">⏱️</div>
+                    <div class="stat-content">
+                        <div class="stat-value">15000+</div>
+                        <div class="stat-label">Hours Tracked</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- About Section -->
+        <section id="about" class="about-section landing-section">
+            <h2>About GrowLog</h2>
+            <div class="about-content">
+                <div class="about-text">
+                    <p>GrowLog is a practical learning tracker for students and self-learners who want consistency—not just notes. You can log daily study sessions, measure streaks, monitor progress with charts, and plan upcoming study tasks with a built-in scheduler.</p>
+                    <p>From first learning day to long-term habits, GrowLog keeps your progress visible and organized with history filters, goals, and a dashboard that turns your effort into insights.</p>
+                </div>
+                <div class="about-features">
+                    <div class="about-feature">
+                        <span class="check">✓</span>
+                        <span>Built for DSA, Web Dev, ML, and any learning path</span>
+                    </div>
+                    <div class="about-feature">
+                        <span class="check">✓</span>
+                        <span>Includes logs, streaks, analytics, goals, and scheduling</span>
+                    </div>
+                    <div class="about-feature">
+                        <span class="check">✓</span>
+                        <span>Free, open source, and easy to extend</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Community Section -->
+        <section id="community" class="community-section landing-section">
+            <div class="community-container">
+                <div class="community-header">
+                    <h2>Join Our Community</h2>
+                    <p>GrowLog is open source! Help us build the future of learning tracking.</p>
+                </div>
+
+                <div class="community-content">
+                    <div class="community-visual">
+                        <img src="assets/Community%20Section.png" alt="GrowLog community collaboration visual" class="section-showcase-image">
+                    </div>
+
+                    <div class="community-description">
+                        <div class="description-icon">🤝</div>
+                        <div class="description-text">
+                            <h3>Be Part of Something Great</h3>
+                            <p>Whether you're a developer, designer, or just passionate about learning, there's a place for you in the GrowLog community. Contribute features, fix bugs, improve UI, or help with documentation.</p>
+                        </div>
+                    </div>
+
+                    <div class="community-buttons">
+                        <a href="https://github.com/growlog/growlog" target="_blank" class="community-btn github-btn">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.6.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v 3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                            </svg>
+                            <div class="btn-content">
+                                <div class="btn-title">Contribute on GitHub</div>
+                                <div class="btn-subtitle">Star ⭐ & Fork the repo</div>
+                            </div>
+                        </a>
+
+                        <a href="https://discord.gg/growlog" target="_blank" class="community-btn discord-btn">
+                            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M20.317 4.492c-1.53-.742-3.17-1.297-4.93-1.584-.21-.04-.419.013-.557.15l-.244.423c-.328.607-.678 1.315-.931 1.901.636.121 1.26.287 1.87.496-.175.122-.347.251-.512.383-4.33-1.996-9.034-1.996-13.299 0-.165-.132-.337-.261-.512-.383.61-.209 1.235-.375 1.871-.496-.253-.586-.603-1.294-.931-1.901-.138-.137-.347-.19-.557-.15-1.76.287-3.398.842-4.93 1.584-.02.009-.044.025-.066.04-3.476 5.189-4.414 10.288-3.967 15.32.023.027.045.052.07.075 2.329 1.727 4.582 2.771 6.794 3.469 1.06.233 2.167.289 3.267.115.956-.139 1.855-.42 2.664-.833l-.275-.388c-.614.364-1.288.655-1.994.86-.706.205-1.466.349-2.263.349h-.004c-.693 0-1.266-.12-1.725-.357l.55.778c1.236.301 2.514.369 3.768.147 1.254-.222 2.455-.676 3.46-1.317l.056-.033c2.212-.699 4.465-.743 6.794-3.469.024-.023.047-.048.07-.075 1.097-6.596-.572-12.326-3.967-15.32-.022-.015-.046-.031-.066-.04zM8.02 13.231c-1.183 0-2.157-.955-2.157-2.131 0-1.176.974-2.131 2.157-2.131 1.183 0 2.157.955 2.157 2.131 0 1.176-.974 2.131-2.157 2.131zm7.975 0c-1.183 0-2.157-.955-2.157-2.131 0-1.176.974-2.131 2.157-2.131 1.183 0 2.157.955 2.157 2.131 0 1.176-.974 2.131-2.157 2.131z"/>
+                            </svg>
+                            <div class="btn-content">
+                                <div class="btn-title">Join Discord Community</div>
+                                <div class="btn-subtitle">Chat & get support</div>
+                            </div>
+                        </a>
+                    </div>
+
+                    <div class="contribution-ideas">
+                        <h4>Ways You Can Contribute</h4>
+                        <div class="ideas-grid">
+                            <div class="idea">
+                                <span class="idea-emoji">💻</span>
+                                <span class="idea-text">Code Features</span>
+                            </div>
+                            <div class="idea">
+                                <span class="idea-emoji">🐛</span>
+                                <span class="idea-text">Fix Bugs</span>
+                            </div>
+                            <div class="idea">
+                                <span class="idea-emoji">🎨</span>
+                                <span class="idea-text">Improve Design</span>
+                            </div>
+                            <div class="idea">
+                                <span class="idea-emoji">📝</span>
+                                <span class="idea-text">Documentation</span>
+                            </div>
+                            <div class="idea">
+                                <span class="idea-emoji">🌐</span>
+                                <span class="idea-text">Translations</span>
+                            </div>
+                            <div class="idea">
+                                <span class="idea-emoji">💡</span>
+                                <span class="idea-text">Ideas & Feedback</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CTA Section -->
+        <section class="cta-section landing-section">
+            <h2>Ready to Start Your Learning Journey?</h2>
+            <p>Join thousands of learners already using GrowLog to build consistency</p>
+            <a href="signup.html" class="btn btn-large">Get Started Now</a>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>🚀 GrowLog</h4>
+                    <p>Your personal learning companion</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="index.html">Home</a></li>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="login.html">Login</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Community</h4>
+                    <ul>
+                        <li><a href="https://github.com" target="_blank">GitHub</a></li>
+                        <li><a href="https://discord.com" target="_blank">Discord</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 GrowLog. Empowering learners worldwide.</p>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

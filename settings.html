@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - GrowLog</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">🚀 GrowLog</div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="nav-link">📊 Dashboard</a>
+                <a href="log.html" class="nav-link">➕ Add Learning</a>
+                <a href="history.html" class="nav-link">📋 History</a>
+                <a href="settings.html" class="nav-link active">⚙️ Settings</a>
+                <a href="index.html" class="nav-link">🏠 Home</a>
+                <a href="index.html#features" class="nav-link">✨ Features</a>
+                <a href="index.html#about" class="nav-link">ℹ️ About</a>
+                <a href="#" class="nav-link" onclick="logout()">🚪 Logout</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content settings-page">
+            <!-- Header with User Profile -->
+            <div class="header-top-bar">
+                <div class="header-left">
+                </div>
+                <div class="header-right">
+                    <button class="theme-toggle-home theme-toggle-global" onclick="toggleTheme()" title="Toggle dark/light theme">
+                        <span class="theme-icon">🌙</span>
+                    </button>
+                    <div class="user-profile-wrapper">
+                        <button class="user-avatar-btn" onclick="toggleUserDropdown(event)">
+                            <span class="user-avatar-icon">👤</span>
+                        </button>
+                        <!-- User Profile Dropdown -->
+                        <div class="user-dropdown" id="userDropdown" style="display: none;">
+                            <div class="dropdown-header">
+                                <div class="user-info">
+                                    <span class="user-name" id="dropdownUserName">User</span>
+                                    <span class="user-email" id="dropdownUserEmail">user@email.com</span>
+                                </div>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-content">
+                                <a href="#" class="dropdown-item" onclick="openUserSettings(event)">
+                                    <span class="item-icon">⚙️</span>
+                                    <span class="item-text">User Settings</span>
+                                </a>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <button class="dropdown-item logout-item" onclick="logout()">
+                                <span class="item-icon">🚪</span>
+                                <span class="item-text">Logout</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Header -->
+            <header class="settings-header">
+                <h1>👤 User Settings</h1>
+                <p>Manage your account and preferences</p>
+            </header>
+
+            <div class="settings-content">
+                <!-- User Profile Card -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <h2>👤 Profile Information</h2>
+                        <p>Your account details</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <h3>Name</h3>
+                                <p>Your full name</p>
+                            </div>
+                            <input type="text" id="userName" class="setting-input" placeholder="Enter your name">
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <h3>Email</h3>
+                                <p>Your email address</p>
+                            </div>
+                            <input type="email" id="userEmail" class="setting-input" placeholder="Enter your email" disabled>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveUserProfile()" style="margin-top: 1rem;">Save Changes</button>
+                    </div>
+                </div>
+
+                <!-- Theme Settings Card -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <h2>🎨 Appearance</h2>
+                        <p>Customize how GrowLog looks</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <h3>Dark Mode</h3>
+                                <p>Enable dark theme for a comfortable viewing experience</p>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="darkModeToggle" onchange="toggleTheme()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Category Management Card -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <h2>📂 Custom Categories</h2>
+                        <p>Manage your learning categories</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <h3>Add Custom Category</h3>
+                                <p>Create a new category for your learning logs</p>
+                            </div>
+                            <div class="category-form">
+                                <input type="text" id="newCategoryInput" placeholder="Enter category name" class="category-input">
+                                <button type="button" class="btn btn-primary" onclick="addCategoryFromSettings()">Add Category</button>
+                            </div>
+                        </div>
+
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <h3>Your Custom Categories</h3>
+                                <p>Manage all your custom categories</p>
+                            </div>
+                            <div class="categories-list" id="categoriesList">
+                                <!-- Custom categories will be listed here -->
+                            </div>
+                            <p class="empty-state" id="emptyCategoriesMessage" style="text-align: center; color: var(--text-secondary); margin-top: 1rem;">
+                                No custom categories yet. Add one above! 📝
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Default Categories Card -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <h2>🏷️ Default Categories</h2>
+                        <p>Pre-built categories for quick selection</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="default-categories">
+                            <div class="category-badge">📚 DSA</div>
+                            <div class="category-badge">🌐 Web Development</div>
+                            <div class="category-badge">🤖 Machine Learning</div>
+                            <div class="category-badge">📌 Other</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- About Card -->
+                <div class="settings-card">
+                    <div class="card-header">
+                        <h2>ℹ️ About</h2>
+                        <p>Information about GrowLog</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="about-info">
+                            <p><strong>Version:</strong> 2.0.0</p>
+                            <p><strong>Last Updated:</strong> February 2026</p>
+                            <p><strong>Theme:</strong> <span id="currentThemeDisplay">Light Mode</span></p>
+                            <p><strong>Data Storage:</strong> Local Browser Storage</p>
+                            <p style="margin-top: 1rem; font-size: 0.9rem; color: var(--text-secondary);">
+                                GrowLog is an open-source learning tracker. All your data is stored locally on your device.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reset Data Card -->
+                <div class="settings-card danger-card">
+                    <div class="card-header">
+                        <h2>⚠️ Danger Zone</h2>
+                        <p>Be careful with these actions</p>
+                    </div>
+                    <div class="card-body">
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <h3>Reset All Data</h3>
+                                <p>Delete all learning logs and custom categories (Cannot be undone!)</p>
+                            </div>
+                            <button type="button" class="btn btn-danger" onclick="confirmResetData()">Reset Data</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

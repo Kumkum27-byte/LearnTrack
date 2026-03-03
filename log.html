@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Learning - GrowLog</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">🚀 GrowLog</div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="nav-link">📊 Dashboard</a>
+                <a href="log.html" class="nav-link active">➕ Add Learning</a>
+                <a href="history.html" class="nav-link">📋 History</a>
+                <a href="settings.html" class="nav-link">⚙️ Settings</a>
+                <a href="index.html" class="nav-link">🏠 Home</a>
+                <a href="index.html#features" class="nav-link">✨ Features</a>
+                <a href="index.html#about" class="nav-link">ℹ️ About</a>
+                <a href="#" class="nav-link" onclick="logout()">🚪 Logout</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content log-page">
+            <!-- Header with User Profile -->
+            <header class="page-header-top">
+                <div class="header-left">
+                    <h1>Add Learning</h1>
+                </div>
+                <div class="header-right">
+                    <button class="theme-toggle-home theme-toggle-global" onclick="toggleTheme()" title="Toggle dark/light theme">
+                        <span class="theme-icon">🌙</span>
+                    </button>
+                    <div class="user-profile-wrapper">
+                        <button class="user-avatar-btn" onclick="toggleUserDropdown(event)">
+                            <span class="user-avatar-icon">👤</span>
+                        </button>
+                        <!-- User Profile Dropdown -->
+                        <div class="user-dropdown" id="userDropdown" style="display: none;">
+                            <div class="dropdown-header">
+                                <div class="user-info">
+                                    <span class="user-name" id="dropdownUserName">User</span>
+                                    <span class="user-email" id="dropdownUserEmail">user@email.com</span>
+                                </div>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <div class="dropdown-content">
+                                <a href="#" class="dropdown-item" onclick="openUserSettings(event)">
+                                    <span class="item-icon">⚙️</span>
+                                    <span class="item-text">User Settings</span>
+                                </a>
+                            </div>
+                            <div class="dropdown-divider"></div>
+                            <button class="dropdown-item logout-item" onclick="logout()">
+                                <span class="item-icon">🚪</span>
+                                <span class="item-text">Logout</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </header>
+            <div class="log-wrapper">
+                <div class="log-container">
+                    <!-- Notebook Form Card -->
+                    <div class="notebook-card">
+                        <!-- Spiral Binding -->
+                        <div class="spiral-binding">
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                            <div class="spiral-dot"></div>
+                        </div>
+
+                        <!-- Form Title -->
+                        <h1 class="form-title">Log Your Learning</h1>
+
+                        <!-- Weekly Goal Progress -->
+                        <div class="weekly-goal-section">
+                            <div class="goal-label">Weekly Goal: <span class="goal-progress" id="goalProgress">0/5</span></div>
+                            <div class="goal-bar">
+                                <div class="goal-fill" id="goalFill" style="width: 0%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Form Content -->
+                        <form id="logForm" class="notebook-form">
+                            <!-- Category -->
+                            <div class="form-group">
+                                <label for="category">Category</label>
+                                <select id="category" required onchange="handleCategoryChange()">
+                                    <option value="">Select or add category</option>
+                                    <option value="" disabled>Example: Web Development</option>
+                                    <option value="__add_custom__">➕ Add Custom Category</option>
+                                </select>
+                                <div class="custom-input-modal" id="categoryCustomModal" style="display: none;">
+                                    <div class="modal-overlay" onclick="closeCategoryCustomModal()"></div>
+                                    <div class="modal-content">
+                                        <h3>Add Custom Category</h3>
+                                        <input type="text" id="categoryCustomInput" placeholder="Enter category name" class="custom-modal-input">
+                                        <div class="modal-buttons">
+                                            <button type="button" class="btn-modal-save" onclick="saveCategoryCustom()">Add</button>
+                                            <button type="button" class="btn-modal-cancel" onclick="closeCategoryCustomModal()">Cancel</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Title/Topic -->
+                            <div class="form-group">
+                                <label for="topic">Title / Topic</label>
+                                <input type="text" id="topic" placeholder="Learned Binary Search Trees" required>
+                                
+                                <!-- Quick Tags -->
+                                <div class="quick-tags-section">
+                                    <div class="quick-tags" id="quickTags">
+                                        <!-- Tags will be generated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Duration -->
+                            <div class="form-group">
+                                <label for="duration">Duration</label>
+                                <select id="duration" required onchange="handleDurationChange()">
+                                    <option value="">Select or add duration</option>
+                                    <option value="" disabled>Example: 2.5 hrs</option>
+                                    <option value="__add_custom__">➕ Add Custom Duration</option>
+                                </select>
+                                <div class="custom-input-modal" id="durationCustomModal" style="display: none;">
+                                    <div class="modal-overlay" onclick="closeDurationCustomModal()"></div>
+                                    <div class="modal-content">
+                                        <h3>Add Custom Duration</h3>
+                                        <input type="number" id="durationCustomInput" placeholder="Enter hours (e.g., 2.5)" class="custom-modal-input" step="0.5" min="0.5">
+                                        <div class="modal-buttons">
+                                            <button type="button" class="btn-modal-save" onclick="saveDurationCustom()">Add</button>
+                                            <button type="button" class="btn-modal-cancel" onclick="closeDurationCustomModal()">Cancel</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Proof / Link -->
+                            <div class="form-group">
+                                <label for="learningDate">Proof / Link <span class="optional">(optional)</span></label>
+                                <input type="text" id="learningDate" placeholder="e.g. GitHub commit URL or blog post link">
+                            </div>
+
+                            <!-- Reflection/Notes -->
+                            <div class="form-group">
+                                <label for="reflection">Reflection (What did you learn?)</label>
+                                <textarea id="reflection" rows="3" placeholder="Share your thoughts, learnings, and challenges..."></textarea>
+                            </div>
+
+                            <!-- Progress Bar -->
+                            <div class="form-progress">
+                                <div class="progress-fill" id="formProgress" style="width: 0%;"></div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <button type="submit" class="btn-submit">Save Log</button>
+                        </form>
+                    </div>
+
+                    <!-- Stats Sidebar -->
+                    <div class="stats-sidebar">
+                        <!-- Streak Card -->
+                        <div class="stat-card streak-stat">
+                            <div class="stat-top">
+                                <div class="stat-icon">🔥</div>
+                                <span class="stat-label">7-Day Streak</span>
+                            </div>
+                            <div class="stat-value" id="streakDisplay">7</div>
+                            <div class="stat-subtext">Days</div>
+                        </div>
+
+                        <!-- Total Hours Card -->
+                        <div class="stat-card hours-stat">
+                            <div class="stat-top">
+                                <div class="stat-icon">⏱️</div>
+                                <span class="stat-label">Total Hours</span>
+                            </div>
+                            <div class="stat-value" id="totalHours">14h 10m</div>
+                        </div>
+
+                        <!-- Completion Rate Card -->
+                        <div class="stat-card completion-stat">
+                            <div class="stat-top">
+                                <div class="stat-icon">📊</div>
+                                <span class="stat-label">Completion Rate</span>
+                            </div>
+                            <div class="stat-value" id="completionRate">75<span class="percent">%</span></div>
+                        </div>
+
+                        <!-- Celebration Notification -->
+                        <div class="celebration-toast" id="celebrationToast" style="display: none;">
+                            <div class="celebration-icon">🔥✨</div>
+                            <div class="celebration-text">Streak Updated! ⬆️</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

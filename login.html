@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - GrowLog</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="auth-wrapper">
+        <div class="auth-top-actions">
+            <a href="index.html" class="btn-back-home">← Back to Home</a>
+            <button class="theme-toggle-global" onclick="toggleTheme()" title="Toggle dark/light theme">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </div>
+        <div class="auth-container">
+            <!-- Left Side - Branding -->
+            <div class="auth-branding">
+                <div class="auth-branding-content">
+                    <div class="auth-logo">🚀</div>
+                    <h2>GrowLog</h2>
+                    <p>Your personal learning companion</p>
+                    <img src="assets/img1.png" alt="GrowLog illustration" class="auth-illustration">
+                    
+                    <div class="auth-features">
+                        <div class="feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Track your learning streaks</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Visualize your progress</span>
+                        </div>
+                        <div class="feature">
+                            <span class="feature-icon">✓</span>
+                            <span>Build consistent habits</span>
+                        </div>
+                    </div>
+
+                    <div class="auth-quote">
+                        <p>"Learning is not a destination, it's a journey."</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side - Form -->
+            <div class="auth-form-area">
+                <div class="form-container">
+                    <h3>Welcome Back</h3>
+                    <p>Log in to continue your learning journey</p>
+
+                    <form id="loginForm" class="auth-form">
+                        <div class="form-field">
+                            <label>Email Address</label>
+                            <input type="email" id="loginEmail" placeholder="you@example.com" required>
+                        </div>
+
+                        <div class="form-field">
+                            <label>Password</label>
+                            <input type="password" id="loginPassword" placeholder="••••••••" required>
+                        </div>
+
+                        <div class="form-footer">
+                            <label class="remember-me">
+                                <input type="checkbox">
+                                <span>Remember me</span>
+                            </label>
+                            <a href="#" class="forgot-link">Forgot password?</a>
+                        </div>
+
+                        <button type="submit" class="btn-submit">Log In</button>
+                    </form>
+
+                    <div class="auth-divider">
+                        <span>or</span>
+                    </div>
+
+                    <p class="auth-toggle">
+                        Don't have an account? <a href="signup.html">Sign up here</a>
+                    </p>
+                </div>

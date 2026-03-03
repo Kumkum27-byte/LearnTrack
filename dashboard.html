@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - GrowLog</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">🚀 GrowLog</div>
+            <nav class="sidebar-nav">
+                <a href="dashboard.html" class="nav-link active">
+                    <span class="nav-icon">📊</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="log.html" class="nav-link">
+                    <span class="nav-icon">➕</span>
+                    <span>Add Learning</span>
+                </a>
+                <a href="history.html" class="nav-link">
+                    <span class="nav-icon">📋</span>
+                    <span>History</span>
+                </a>
+                <a href="settings.html" class="nav-link">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Settings</span>
+                </a>
+                <a href="index.html" class="nav-link">
+                    <span class="nav-icon">🏠</span>
+                    <span>Home</span>
+                </a>
+                <a href="index.html#features" class="nav-link">
+                    <span class="nav-icon">✨</span>
+                    <span>Features</span>
+                </a>
+                <a href="index.html#about" class="nav-link">
+                    <span class="nav-icon">ℹ️</span>
+                    <span>About</span>
+                </a>
+                <a href="#" class="nav-link" onclick="logout()">
+                    <span class="nav-icon">🚪</span>
+                    <span>Logout</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content dashboard-main">
+            <!-- Header -->
+            <header class="dashboard-header">
+                <div class="header-left">
+                    <div class="dashboard-search-wrap">
+                        <input type="search" id="dashboardSearch" class="dashboard-search" placeholder="Search courses, topics...">
+                    </div>
+                    <h1>Dashboard</h1>
+                    <p class="dashboard-subtitle">Track your learning momentum and stay consistent.</p>
+                </div>
+                <div class="header-right">
+                    <div class="date-display">
+                        <span id="dateDisplay">Tuesday, April 23</span>
+                    </div>
+                    <div class="header-actions">
+                        <button class="theme-toggle-home theme-toggle-global" onclick="toggleTheme()" title="Toggle dark/light theme">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                        <button class="notification-btn">
+                            <span class="notification-badge">1</span>
+                            🔔
+                        </button>
+                        <div class="user-profile-wrapper">
+                            <button class="user-avatar-btn" onclick="toggleUserDropdown(event)">
+                                <span class="user-avatar-icon">👤</span>
+                            </button>
+                            <!-- User Profile Dropdown -->
+                            <div class="user-dropdown" id="userDropdown" style="display: none;">
+                                <div class="dropdown-header">
+                                    <div class="user-info">
+                                        <span class="user-name" id="dropdownUserName">User</span>
+                                        <span class="user-email" id="dropdownUserEmail">user@email.com</span>
+                                    </div>
+                                </div>
+                                <div class="dropdown-divider"></div>
+                                <div class="dropdown-content">
+                                    <a href="#" class="dropdown-item" onclick="openUserSettings(event)">
+                                        <span class="item-icon">⚙️</span>
+                                        <span class="item-text">User Settings</span>
+                                    </a>
+                                </div>
+                                <div class="dropdown-divider"></div>
+                                <button class="dropdown-item logout-item" onclick="logout()">
+                                    <span class="item-icon">🚪</span>
+                                    <span class="item-text">Logout</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <div class="dashboard-content">
+                <!-- Left Column -->
+                <div class="dashboard-left">
+                    <!-- Welcome Card -->
+                    <div class="card welcome-card">
+                        <div class="card-header-section">
+                            <h2 id="welcomeText">Welcome back, User!</h2>
+                            <div class="streak-section">
+                                <div class="streak-badge">
+                                    <span class="streak-flame">🔥</span>
+                                    <span class="streak-number" id="currentStreak">7</span>
+                                    <span class="streak-text">Day Streak</span>
+                                </div>
+                                <div class="streak-info">
+                                    <p>Active Days this Month: <strong id="activeDays">19</strong></p>
+                                    <p>Longest streak: <strong id="longestStreak">21</strong> days</p>
+                                </div>
+                            </div>
+                        </div>
+                        <svg class="wave-decoration" viewBox="0 0 1200 120" preserveAspectRatio="none">
+                            <path d="M0,50 Q300,10 600,50 T1200,50 L1200,120 L0,120 Z" fill="url(#waveGradient)"></path>
+                            <defs>
+                                <linearGradient id="waveGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.1" />
+                                    <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+
+                    <!-- Heatmap Card -->
+                    <div class="card heatmap-card">
+                        <h3>Learning Heatmap</h3>
+                        <div class="heatmap-wrapper">
+                            <div class="heatmap-section">
+                                <div class="month-header" id="currentMonthLabel">Current Month</div>
+                                <div class="heatmap-grid" id="currentHeatmap"></div>
+                                <div class="weekdays-label">S M T W T F S</div>
+                            </div>
+                            <div class="heatmap-section">
+                                <div class="month-header" id="previousMonthLabel">Previous Month</div>
+                                <div class="heatmap-grid" id="previousHeatmap"></div>
+                                <div class="weekdays-label">S M T W T F S</div>
+                            </div>
+                        </div>
+                        <div class="heatmap-info">
+                            <div class="info-item">
+                                <span class="info-label">Total Learning Days:</span>
+                                <span class="info-value" id="totalLearningDays">37</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">Total Hours Learned:</span>
+                                <span class="info-value" id="totalHours">59h 15m</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="analytics-layout">
+                        <div class="analytics-top-row">
+                            <!-- Graphical Analytics -->
+                            <div class="card analytics-card">
+                                <h3>Graphical Analytics</h3>
+                                <div class="analytics-grid">
+                                    <div class="analytics-panel">
+                                        <h4>Last 7 Days (Hours)</h4>
+                                        <canvas id="weeklyTrendChart" aria-label="Weekly learning trend chart"></canvas>
+                                    </div>
+                                    <div class="analytics-panel">
+                                        <h4>Category Distribution</h4>
+                                        <canvas id="categorySplitChart" aria-label="Learning category distribution chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="plan-goals-row">
+                            <div class="card today-plan-card">
+                                <h3>Today's Learning Plan</h3>
+                                <div class="plan-list" id="planItems">
+                                    <label class="plan-item">
+                                        <input type="checkbox">
+                                        <span>Review Graph Traversal</span>
+                                    </label>
+                                    <label class="plan-item">
+                                        <input type="checkbox">
+                                        <span>Solve dynamic programming problem</span>
+                                    </label>
+                                </div>
+                                <p class="streak-message">You're <strong>2 days</strong> away from beating your longest streak! ✨</p>
+                            </div>
+
+                            <div class="card learning-goals-card">
+                                <h3>Learning Goals</h3>
+                                <div class="goals-list">
+                                    <div class="goal-item">
+                                        <div class="goal-header">
+                                            <span class="goal-icon">🎯</span>
+                                            <span class="goal-name">Master DSA</span>
+                                        </div>
+                                        <div class="goal-progress-bar">
+                                            <div class="progress" style="width: 60%;"></div>
+                                        </div>
+                                        <span class="goal-count">2/6</span>
+                                    </div>
+                                    <div class="goal-item">
+                                        <div class="goal-header">
+                                            <span class="goal-icon">⚛️</span>
+                                            <span class="goal-name">React.js Fundamentals</span>
+                                        </div>
+                                        <div class="goal-progress-bar">
+                                            <div class="progress" style="width: 42%;"></div>
+                                        </div>
+                                        <span class="goal-count">3/7</span>
+                                    </div>
+                                    <div class="goal-item">
+                                        <div class="goal-header">
+                                            <span class="goal-icon">🧠</span>
+                                            <span class="goal-name">Learn Machine Learning</span>
+                                        </div>
+                                        <div class="goal-progress-bar">
+                                            <div class="progress" style="width: 20%;"></div>
+                                        </div>
+                                        <span class="goal-count">1/5</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Right Sidebar -->
+                <div class="dashboard-right">
+                    <!-- Scheduler Calendar -->
+                    <div class="card scheduler-card">
+                        <div class="scheduler-head">
+                            <h3>Schedule Planner</h3>
+                            <div class="scheduler-nav">
+                                <button type="button" id="calPrevMonth" class="cal-nav-btn" aria-label="Previous month">◀</button>
+                                <span id="calMonthLabel">Month Year</span>
+                                <button type="button" id="calNextMonth" class="cal-nav-btn" aria-label="Next month">▶</button>
+                            </div>
+                        </div>
+
+                        <div class="scheduler-weekdays">
+                            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+                        </div>
+                        <div class="scheduler-grid" id="schedulerGrid"></div>
+
+                        <form id="scheduleForm" class="schedule-form">
+                            <div class="schedule-inputs">
+                                <input type="text" id="scheduleTitle" placeholder="Task title (e.g., Revise Graphs)" required>
+                                <input type="date" id="scheduleDate" required>
+                                <input type="time" id="scheduleTime">
+                                <select id="scheduleCategory">
+                                    <option value="General">General</option>
+                                    <option value="DSA">DSA</option>
+                                    <option value="Web">Web Dev</option>
+                                    <option value="ML">Machine Learning</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn-save-quick">Add to Calendar</button>
+                        </form>
+
+                        <div class="scheduled-list-wrap">
+                            <h4>Upcoming</h4>
+                            <div id="scheduledList" class="scheduled-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- Today's Learning Log -->
+                    <div class="card quick-log-card">
+                        <h3>Today's Learning Log</h3>
+                        <form class="quick-log-form" id="quickLogForm">
+                            <div class="form-field">
+                                <label>Category</label>
+                                <select id="quickCategory" required>
+                                    <option value="">Select Category</option>
+                                    <option value="DSA">DSA</option>
+                                    <option value="Web">Web Dev</option>
+                                    <option value="ML">Machine Learning</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form-field">
+                                <label>What did you learn?</label>
+                                <textarea id="quickTopic" placeholder="e.g., Practiced recursion problems" rows="3"></textarea>
+                            </div>
+                            <button type="submit" class="btn-save-quick">Save Log</button>
+                        </form>
+                    </div>
+
+                    <!-- Stats Cards -->
+                    <div class="card stats-card">
+                        <div class="stat">
+                            <div class="stat-icon">🔥</div>
+                            <div class="stat-text">
+                                <p class="stat-label">7-Day Streak</p>
+                                <p class="stat-value" id="streakDisplay">7 Days</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card stats-card">
+                        <div class="stat">
+                            <div class="stat-icon">⏱️</div>
+                            <div class="stat-text">
+                                <p class="stat-label">Total Hours</p>
+                                <p class="stat-value" id="totalHoursDisplay">14h 10m</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card stats-card">
+                        <div class="stat">
+                            <div class="stat-icon">📊</div>
+                            <div class="stat-text">
+                                <p class="stat-label">Completion Rate</p>
+                                <p class="stat-value" id="completionRateDisplay">75%</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="card recent-activity-card">
+                        <h3>Recent Learning Activity</h3>
+                        <div class="logs-list" id="logsList"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+</body>
+</html>
