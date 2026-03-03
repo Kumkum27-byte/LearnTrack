@@ -1209,7 +1209,7 @@ function initializeUserProfile() {
     document.addEventListener('click', function(event) {
         const dropdown = document.getElementById('userDropdown');
         const userBtn = event.target.closest('.user-avatar-btn');
-        if (dropdown && !userBtn && event.target !== dropdown) {
+        if (dropdown && !userBtn && !dropdown.contains(event.target)) {
             dropdown.style.display = 'none';
         }
     });
@@ -1232,7 +1232,8 @@ function toggleUserDropdown(event) {
     event.stopPropagation();
     const dropdown = document.getElementById('userDropdown');
     if (dropdown) {
-        dropdown.style.display = dropdown.style.display === 'none' ? 'flex' : 'none';
+        const isVisible = getComputedStyle(dropdown).display !== 'none';
+        dropdown.style.display = isVisible ? 'none' : 'flex';
     }
 }
 
