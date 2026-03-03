@@ -137,6 +137,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 tagElement.addEventListener('click', function(e) {
                     e.preventDefault();
                     const topicInput = document.getElementById('topic');
+                    if (!topicInput) {
+                        console.warn('Topic input not found while applying quick tag.');
+                        return;
+                    }
                     const currentText = topicInput.value.trim();
                     if (currentText) {
                         topicInput.value = currentText + ' - ' + tag;
@@ -369,7 +373,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (quickLogForm) {
         quickLogForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            const category = document.getElementById('quickCategory').value;
+            const quickCategoryEl = document.getElementById('quickCategory');
+            if (!quickCategoryEl) {
+                showToast('⚠️ Quick log category field is missing');
+                return;
+            }
+            const category = quickCategoryEl.value;
             const reflection = document.getElementById('quickTopic')?.value?.trim();
 
             if (!category || !reflection) {
@@ -1219,6 +1228,7 @@ function updateUserProfileDisplay(user) {
 }
 
 function toggleUserDropdown(event) {
+    if (!event) return;
     event.stopPropagation();
     const dropdown = document.getElementById('userDropdown');
     if (dropdown) {
@@ -1227,6 +1237,7 @@ function toggleUserDropdown(event) {
 }
 
 function openUserSettings(event) {
+    if (!event) return;
     event.preventDefault();
     event.stopPropagation();
     const dropdown = document.getElementById('userDropdown');
