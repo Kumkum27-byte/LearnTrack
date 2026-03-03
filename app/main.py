@@ -1,46 +1,26 @@
 from fastapi import FastAPI
-from fastapi import APIRouter, HTTPSException
-from pydantic import BaseModel, EmailStr
-from datetime import date
-from app.schema.user import UserCreate, Userlogin
+from app.database import engine, Base
+from app.routers.user import router as user_router
+from app.routers.track import router as track_router
+from app.routers.log import router as log_router
+from app.models import user, track, daily_log, streak, ai
+from app import models
+from app.database import Base
+from app.routers import auth
 
-#Create FastAPI instance
+
+
+Base.metadata.create_all(bind=engine)
+
+
+#app instance
 app = FastAPI()
 
-#schema/user.py
-class UsercCreate(BaseModel):
-    email : EmailStr
-    password : str
+app.include_router(auth.router)
+app.include_router(user_router)
+app.include_router(track_router)
+app.include_router(log_router)
 
-class Userlogin(BaseModel):
-    email : EmailStr
-    password : str
-
-#schema/learning.py
-class LearningLogCreate(BaseModel):
-    date : date
-    topic : str
-    time_spent_minutes : int
-
-class LearningLogResponse(BaseModel):
-    date : date
-    topic : str
-    time_spent_minutes : str
-
-
-app = APIRouter(prefix="/auth", tags=["auth"])
-
-user = {}
-
-#Routes
 @app.get("/")
-def root():
-    return{"message" : "Welcome to the FastAPI application!"}
-
-@app.post("/signup")
-def signup(user_create: UserCreate):
-    if user_create.email in user:
-        raise HTTPSException(status_code=400, detail="User already exists")
-    user[user_create.email] = {
-        "password" : user_create.password
-    }
+def read_root():
+    return {"message": "Database Connected!"}
