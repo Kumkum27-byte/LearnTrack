@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Learning History - GrowLog</title>
+    <title>My Logs - GrowLog</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script>
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
     </script>
-    <script src="script.js" defer></script>
+    <script src="script.js?v=20260304-6" defer></script>
 </head>
 <body>
     <div class="dashboard-container">
@@ -20,7 +20,7 @@
             <nav class="sidebar-nav">
                 <a href="dashboard.html" class="nav-link">📊 Dashboard</a>
                 <a href="log.html" class="nav-link">➕ Add Learning</a>
-                <a href="history.html" class="nav-link active">📋 History</a>
+                <a href="history.html" class="nav-link active">📋 My Logs</a>
                 <a href="settings.html" class="nav-link">⚙️ Settings</a>
                 <a href="index.html" class="nav-link">🏠 Home</a>
                 <a href="index.html#features" class="nav-link">✨ Features</a>
@@ -70,7 +70,7 @@
             <!-- Header -->
             <header class="page-header">
                 <div class="header-content">
-                    <h1>📚 Learning History</h1>
+                    <h1>📚 My Logs</h1>
                     <p class="header-subtitle">Track all your learning journey</p>
                 </div>
             </header>
@@ -92,18 +92,32 @@
                 </div>
             </section>
 
-            <!-- Learning Logs -->
-            <section class="history-section">
-                <div class="logs-container" id="logsContainer">
-                    <div class="empty-state">
-                        <img src="assets/No%20Data%20Yet.png" alt="No learning data yet" class="empty-state-image">
-                        <div class="empty-icon">📖</div>
-                        <p class="empty-message">No learning logs yet.</p>
-                        <p class="empty-submessage">Start your learning journey today!</p>
-                        <a href="log.html" class="btn-start-logging">Start Logging →</a>
-                    </div>
+            <!-- Daily Plan + Quick Log -->
+            <section class="plan-goals-row" style="margin-bottom: 1.5rem;">
+                <div class="card today-plan-card">
+                    <h3>Today's Learning Plan</h3>
+                    <div class="plan-list" id="planItems"></div>
+                    <p class="streak-message" id="planSummaryMessage">Plan for today will appear here ✨</p>
+                </div>
+
+                <div class="card quick-log-card">
+                    <h3>Today's Learning Log</h3>
+                    <form class="quick-log-form" id="quickLogForm">
+                        <div class="form-field">
+                            <label>Category</label>
+                            <select id="quickCategory" required>
+                                <option value="">Select Category</option>
+                            </select>
+                        </div>
+                        <div class="form-field">
+                            <label>What did you learn?</label>
+                            <textarea id="quickTopic" placeholder="e.g., Practiced recursion problems" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="btn-save-quick">Save Log</button>
+                    </form>
                 </div>
             </section>
+
         </main>
     </div>
 </body>

@@ -17,6 +17,61 @@ router = APIRouter(
     tags=["Logs"]
 )
 
+
+def _delete_log_by_id(log_id: int, db: Session, current_user: User):
+    log = db.query(DailyLog).filter(DailyLog.id == log_id).first()
+    if not log:
+        raise HTTPException(
+            status_code=404,
+            detail="Log not found"
+        )
+
+    track = db.query(Track).filter(Track.id == log.track_id).first()
+    if not track or track.user_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden"
+        )
+
+    db.delete(log)
+    db.flush()
+
+    recompute_track_streak(db, track)
+    db.commit()
+    return
+
+def recompute_track_streak(db: Session, track: Track):
+    dates = db.query(DailyLog.date).filter(DailyLog.track_id == track.id).distinct().all()
+    date_values = sorted([row[0] for row in dates if row and row[0]])
+
+    if not date_values:
+        track.current_streak = 0
+        track.longest_streak = 0
+        return
+
+    # longest streak across all logged dates
+    longest = 1
+    run = 1
+    for i in range(1, len(date_values)):
+        if date_values[i] == date_values[i - 1] + timedelta(days=1):
+            run += 1
+        else:
+            run = 1
+        if run > longest:
+            longest = run
+
+    # current streak should end at today (auto-resets after missed day)
+    today = datetime.utcnow().date()
+    date_set = set(date_values)
+    current = 0
+    cursor = today
+    while cursor in date_set:
+        current += 1
+        cursor -= timedelta(days=1)
+
+    track.current_streak = current
+    track.longest_streak = longest
+
 @router.post("/logs/{track_id}", response_model=LogResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/{track_id}", response_model=LogResponse, status_code=status.HTTP_201_CREATED)
 
@@ -41,13 +96,11 @@ def create_daily_log(
             detail = "Forbidden"
         )
     
-    #check duplicate log
-    existing_log = db.query(DailyLog).filter(DailyLog.track_id == track_id, DailyLog.date==log.date).first()
-    if existing_log:
-        raise HTTPException(
-            status_code = 400,
-            detail = "Log for this date already exists"
-        )
+    #check whether this is first log for the selected date
+    existing_log_same_day = db.query(DailyLog).filter(
+        DailyLog.track_id == track_id,
+        DailyLog.date == log.date
+    ).first()
     
     #create new log
     new_log = DailyLog(
@@ -62,20 +115,10 @@ def create_daily_log(
     db.commit()
     db.refresh(new_log)
 
-    #Streak Logic
-    previous_date = log.date-timedelta(days=1)
-
-    prev_log = db.query(DailyLog).filter(DailyLog.track_id == track_id, DailyLog.date == previous_date).first()
-    if prev_log:
-        track.current_streak+=1
-    else:
-        track.current_streak=1
-    
-    track.longest_streak = max(
-        track.longest_streak, track.current_streak
-    )
-
-    db.commit()
+    # Streak recomputation (only if a new day was introduced)
+    if not existing_log_same_day:
+        recompute_track_streak(db, track)
+        db.commit()
     #return ressponse
     return new_log
 
@@ -102,6 +145,7 @@ def get_logs_for_track(
     return log
 
 @router.put("/logs/{log_id}", response_model=LogResponse)
+@router.put("/{log_id}", response_model=LogResponse)
 def update_daily_log(
     log_id : int,
     log_update : LogUpdate,
@@ -125,6 +169,27 @@ def update_daily_log(
     db.refresh(log)
 
     return log
+
+@router.delete("/logs/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{log_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_daily_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    _delete_log_by_id(log_id, db, current_user)
+    return
+
+
+@router.post("/{log_id}/delete", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/logs/{log_id}/delete", status_code=status.HTTP_204_NO_CONTENT)
+def delete_daily_log_via_post(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    _delete_log_by_id(log_id, db, current_user)
+    return
 
 #Log completion detection
 @router.post("/{log_id}/complete")

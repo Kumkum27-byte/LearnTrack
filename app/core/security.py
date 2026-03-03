@@ -9,7 +9,7 @@ from fastapi.security import OAuth2PasswordBearer
 
 SECRET_KEY = "same_string"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
 pwd_context = CryptContext(
     schemes=["bcrypt"],   
