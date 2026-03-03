@@ -1,0 +1,26 @@
+from fastapi import FastAPI
+from app.database import engine, Base
+from app.routers.user import router as user_router
+from app.routers.track import router as track_router
+from app.routers.log import router as log_router
+from app.models import user, track, daily_log, streak, ai
+from app import models
+from app.database import Base
+from app.routers import auth
+
+
+
+Base.metadata.create_all(bind=engine)
+
+
+#app instance
+app = FastAPI()
+
+app.include_router(auth.router)
+app.include_router(user_router)
+app.include_router(track_router)
+app.include_router(log_router)
+
+@app.get("/")
+def read_root():
+    return {"message": "Database Connected!"}
