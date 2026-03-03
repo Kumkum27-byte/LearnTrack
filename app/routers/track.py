@@ -47,6 +47,7 @@ def create_track(
 
 @router.get("/{user_id}/tracks", response_model=list[TrackResponse])
 def get_tracks(
+    user_id: int,
     db : Session= Depends(get_db),
     current_user : User = Depends(get_current_user)
 ):
@@ -54,8 +55,15 @@ def get_tracks(
     if not user:
         raise HTTPException(
             status_code = 404,
-            details = "User not found"
+            detail = "User not found"
         )
+
+    if user_id != current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden"
+        )
+
     #query all tracks for this user
     tracks = db.query(Track).filter(Track.user_id == user_id).all()
 
@@ -92,7 +100,7 @@ def update_track(
     db: Session = Depends(get_db),
     current_user : User = Depends(get_current_user)
 ):
-    track = db.query(Track).filter(Track.id == track.id).first()
+    track = db.query(Track).filter(Track.id == track_id).first()
 
     if not track:
         raise HTTPException(
@@ -106,8 +114,10 @@ def update_track(
             status_code = 403,
             detail = "Forbidden"
         )
-    track.name = updated_data.name
-    db.commit
+    track.title = updated_data.title
+    track.start_date = updated_data.start_date
+    track.end_date = updated_data.end_date
+    db.commit()
     db.refresh(track)
 
     return track
@@ -122,7 +132,7 @@ def get_streak(
     if not  track:
         raise HTTPException(
             status_code = 404,
-            details =  "Track not found"
+            detail =  "Track not found"
         )
     
     #return streak values

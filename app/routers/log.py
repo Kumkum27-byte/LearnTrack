@@ -3,7 +3,7 @@ from app.models.user import User
 from app.models.track import Track
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import asc
+from sqlalchemy import asc, desc
 from datetime import timedelta, datetime
 from app.services.ai import start_ai_interaction
 
@@ -18,6 +18,7 @@ router = APIRouter(
 )
 
 @router.post("/logs/{track_id}", response_model=LogResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{track_id}", response_model=LogResponse, status_code=status.HTTP_201_CREATED)
 
 def create_daily_log(
     track_id : int,
@@ -79,6 +80,7 @@ def create_daily_log(
     return new_log
 
 @router.get("/logs/{track_id}", response_model=list[LogResponse])
+@router.get("/{track_id}", response_model=list[LogResponse])
 def get_logs_for_track(
     track_id : int,
     order : str = Query("asc", pattern="^(asc|desc)$"),

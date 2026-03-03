@@ -16,6 +16,146 @@ function getStoredJSON(key, fallback) {
 let weeklyTrendChartInstance = null;
 let categorySplitChartInstance = null;
 let schedulerMonthDate = new Date();
+const API_BASE_URL = localStorage.getItem('apiBaseUrl') || 'http://127.0.0.1:8000';
+
+function getAuthToken() {
+    return localStorage.getItem('authToken') || '';
+}
+
+function toDateString(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function parseJwtPayload(token) {
+    try {
+        const base64Url = token.split('.')[1];
+        if (!base64Url) return null;
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = base64.padEnd(base64.length + (4 - (base64.length % 4 || 4)) % 4, '=');
+        return JSON.parse(atob(padded));
+    } catch (error) {
+        console.warn('Failed to parse JWT token payload.', error);
+        return null;
+    }
+}
+
+function serializeNotes(details) {
+    try {
+        return JSON.stringify(details);
+    } catch {
+        return details?.reflection || '';
+    }
+}
+
+function deserializeNotes(notesText) {
+    if (!notesText) return {};
+    try {
+        const parsed = JSON.parse(notesText);
+        return typeof parsed === 'object' && parsed ? parsed : { reflection: notesText };
+    } catch {
+        return { reflection: notesText };
+    }
+}
+
+async function apiRequest(endpoint, options = {}) {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
+    if (!response.ok) {
+        let message = `Request failed (${response.status})`;
+        try {
+            const errorData = await response.json();
+            message = errorData.detail || errorData.message || message;
+        } catch {
+            // Ignore parse failure and keep fallback message.
+        }
+        throw new Error(message);
+    }
+
+    if (response.status === 204) return null;
+    return response.json();
+}
+
+async function fetchCurrentUserFromToken(token) {
+    const payload = parseJwtPayload(token);
+    const userId = payload?.sub;
+    if (!userId) {
+        throw new Error('Unable to identify user from login token');
+    }
+
+    return apiRequest(`/users/${userId}`, {
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    });
+}
+
+async function ensurePrimaryTrack(userId, token) {
+    const authHeaders = { Authorization: `Bearer ${token}` };
+    const existingTrackId = localStorage.getItem('currentTrackId');
+    if (existingTrackId) {
+        return Number(existingTrackId);
+    }
+
+    const tracks = await apiRequest(`/users/${userId}/tracks`, {
+        headers: authHeaders
+    });
+
+    if (Array.isArray(tracks) && tracks.length > 0) {
+        localStorage.setItem('currentTrackId', String(tracks[0].id));
+        return tracks[0].id;
+    }
+
+    const today = new Date();
+    const ninetyDaysLater = new Date(today);
+    ninetyDaysLater.setDate(today.getDate() + 90);
+
+    const createdTrack = await apiRequest(`/users/${userId}/tracks`, {
+        method: 'POST',
+        headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            title: 'My Learning Journey',
+            start_date: toDateString(today),
+            end_date: toDateString(ninetyDaysLater)
+        })
+    });
+
+    localStorage.setItem('currentTrackId', String(createdTrack.id));
+    return createdTrack.id;
+}
+
+async function syncLogsFromBackend() {
+    const token = getAuthToken();
+    const currentUser = getStoredJSON('currentUser', null);
+    if (!token || !currentUser?.id) return;
+
+    const trackId = await ensurePrimaryTrack(currentUser.id, token);
+    const backendLogs = await apiRequest(`/logs/${trackId}`, {
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    });
+
+    const mappedLogs = (backendLogs || []).map(item => {
+        const details = deserializeNotes(item.notes);
+        return {
+            id: item.id,
+            category: details.category || 'Other',
+            topic: details.topic || 'Learning Session',
+            duration: Number(((item.minutes_spent || 0) / 60).toFixed(2)),
+            reflection: details.reflection || '',
+            proof: details.proof || '',
+            date: item.date,
+            createdAt: item.date
+        };
+    });
+
+    localStorage.setItem('learningLogs', JSON.stringify(mappedLogs));
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ LearnTrack - DOM Loaded - Script Initialized');
@@ -33,7 +173,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const signupForm = document.getElementById('signupForm');
     
     if (signupForm) {
-        signupForm.addEventListener('submit', function(e) {
+        signupForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             const name = document.getElementById('signupName')?.value.trim();
             const email = document.getElementById('signupEmail')?.value.trim();
@@ -61,27 +201,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Check if user already exists
-            let users = getStoredJSON('learntrackUsers', []);
-            if (users.find(u => u.email === email)) {
-                showToast('❌ Email already registered. Please login or use another email.');
-                return;
+            try {
+                await apiRequest('/users/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name,
+                        email,
+                        password
+                    })
+                });
+
+                showToast('✅ Account created! Redirecting to login...');
+                setTimeout(() => {
+                    window.location.href = 'login.html';
+                }, 1500);
+            } catch (error) {
+                showToast(`❌ ${error.message}`);
             }
-
-            // Save new user
-            users.push({
-                id: Date.now(),
-                name: name,
-                email: email,
-                password: password,
-                createdAt: new Date().toLocaleString()
-            });
-            localStorage.setItem('learntrackUsers', JSON.stringify(users));
-
-            showToast('✅ Account created! Redirecting to login...');
-            setTimeout(() => {
-                window.location.href = 'login.html';
-            }, 1500);
         });
     }
 
@@ -90,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.getElementById('loginForm');
     
     if (loginForm) {
-        loginForm.addEventListener('submit', function(e) {
+        loginForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             const email = document.getElementById('loginEmail')?.value.trim();
             const password = document.getElementById('loginPassword')?.value;
@@ -100,22 +239,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Check user credentials
-            let users = getStoredJSON('learntrackUsers', []);
-            const user = users.find(u => u.email === email && u.password === password);
+            try {
+                const formData = new URLSearchParams();
+                formData.append('username', email);
+                formData.append('password', password);
 
-            if (user) {
-                // Successful login
+                const authData = await apiRequest('/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: formData.toString()
+                });
+
+                const token = authData.access_token;
+                if (!token) {
+                    throw new Error('No access token returned from server');
+                }
+
+                const user = await fetchCurrentUserFromToken(token);
+
+                localStorage.setItem('authToken', token);
                 localStorage.setItem('currentUser', JSON.stringify(user));
                 localStorage.setItem('isLoggedIn', 'true');
-                localStorage.setItem('userEmail', email);
+                localStorage.setItem('userEmail', user.email || email);
+
+                await ensurePrimaryTrack(user.id, token);
+                await syncLogsFromBackend();
+
                 showToast('✅ Login successful! Redirecting...');
-                
                 setTimeout(() => {
                     window.location.href = 'dashboard.html';
-                }, 1500);
-            } else {
-                showToast('❌ Invalid email or password');
+                }, 1200);
+            } catch (error) {
+                showToast(`❌ ${error.message}`);
             }
         });
     }
@@ -160,7 +317,7 @@ document.addEventListener('DOMContentLoaded', function() {
             input.addEventListener('input', updateFormProgress);
         });
 
-        logForm.addEventListener('submit', function(e) {
+        logForm.addEventListener('submit', async function(e) {
             e.preventDefault();
 
             const category = document.getElementById('category')?.value;
@@ -180,22 +337,36 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Create learning log entry
-            const logEntry = {
-                id: Date.now(),
-                category: category,
-                topic: topic,
-                duration: parseFloat(duration),
-                reflection: reflection,
-                proof: proof,
-                date: new Date().toISOString().split('T')[0],
-                createdAt: new Date().toISOString()
-            };
+            const token = getAuthToken();
+            const currentUser = getStoredJSON('currentUser', null);
+            if (!token || !currentUser?.id) {
+                showToast('⚠️ Please login first');
+                return;
+            }
 
-            // Save to localStorage
-            let logs = getStoredJSON('learningLogs', []);
-            logs.push(logEntry);
-            localStorage.setItem('learningLogs', JSON.stringify(logs));
+            try {
+                const trackId = await ensurePrimaryTrack(currentUser.id, token);
+                const payloadDate = new Date().toISOString().split('T')[0];
+                const durationHours = parseFloat(duration) || 0;
+
+                await apiRequest(`/logs/${trackId}`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        date: payloadDate,
+                        minutes_spent: Math.max(1, Math.round(durationHours * 60)),
+                        notes: serializeNotes({ category, topic, reflection, proof })
+                    })
+                });
+
+                await syncLogsFromBackend();
+            } catch (error) {
+                showToast(`❌ ${error.message}`);
+                return;
+            }
 
             // Show success toast
             showToast('✨ Learning logged successfully!');
@@ -354,6 +525,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 window.location.href = 'login.html';
             }, 1500);
         }
+    } else {
+        syncLogsFromBackend()
+            .then(() => {
+                loadDashboardStats();
+                displayRecentLogs();
+                renderDashboardAnalytics();
+            })
+            .catch(error => {
+                console.warn('Failed to sync logs from backend:', error.message);
+            });
     }
 
     // Display user name on dashboard
@@ -371,7 +552,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Quick log form handler on dashboard
     const quickLogForm = document.getElementById('quickLogForm');
     if (quickLogForm) {
-        quickLogForm.addEventListener('submit', function(e) {
+        quickLogForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             const quickCategoryEl = document.getElementById('quickCategory');
             if (!quickCategoryEl) {
@@ -386,19 +567,38 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Create a new log
-            const newLog = {
-                date: new Date().toISOString(),
-                category: category,
-                topic: 'Quick Log',
-                duration: 1, // Default 1 hour for quick logs
-                reflection: reflection
-            };
+            const token = getAuthToken();
+            const currentUser = getStoredJSON('currentUser', null);
+            if (!token || !currentUser?.id) {
+                showToast('⚠️ Please login first');
+                return;
+            }
 
-            // Save to localStorage
-            const logs = getStoredJSON('learningLogs', []);
-            logs.push(newLog);
-            localStorage.setItem('learningLogs', JSON.stringify(logs));
+            try {
+                const trackId = await ensurePrimaryTrack(currentUser.id, token);
+                await apiRequest(`/logs/${trackId}`, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        date: new Date().toISOString().split('T')[0],
+                        minutes_spent: 60,
+                        notes: serializeNotes({
+                            category,
+                            topic: 'Quick Log',
+                            reflection,
+                            proof: ''
+                        })
+                    })
+                });
+
+                await syncLogsFromBackend();
+            } catch (error) {
+                showToast(`❌ ${error.message}`);
+                return;
+            }
 
             // Reset form and reload
             quickLogForm.reset();
@@ -417,6 +617,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 localStorage.removeItem('isLoggedIn');
                 localStorage.removeItem('currentUser');
                 localStorage.removeItem('userEmail');
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('currentTrackId');
                 showToast('✅ Logged out successfully!');
                 setTimeout(() => {
                     window.location.href = 'login.html';
@@ -453,6 +655,8 @@ function logout() {
         localStorage.removeItem('isLoggedIn');
         localStorage.removeItem('currentUser');
         localStorage.removeItem('userEmail');
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('currentTrackId');
         showToast('✅ Logged out successfully!');
         setTimeout(() => {
             window.location.href = 'login.html';
@@ -1209,7 +1413,7 @@ function initializeUserProfile() {
     document.addEventListener('click', function(event) {
         const dropdown = document.getElementById('userDropdown');
         const userBtn = event.target.closest('.user-avatar-btn');
-        if (dropdown && !userBtn && event.target !== dropdown) {
+        if (dropdown && !userBtn && !dropdown.contains(event.target)) {
             dropdown.style.display = 'none';
         }
     });
@@ -1232,7 +1436,8 @@ function toggleUserDropdown(event) {
     event.stopPropagation();
     const dropdown = document.getElementById('userDropdown');
     if (dropdown) {
-        dropdown.style.display = dropdown.style.display === 'none' ? 'flex' : 'none';
+        const isVisible = getComputedStyle(dropdown).display !== 'none';
+        dropdown.style.display = isVisible ? 'none' : 'flex';
     }
 }
 
