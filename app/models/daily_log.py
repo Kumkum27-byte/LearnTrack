@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Date, Boolean, ForeignKey, String
+from sqlalchemy import Column, Integer, Date, Boolean, ForeignKey, String, DateTime
 from sqlalchemy.orm import relationship
 from app.database import Base
 from app.models.ai import AIConversation
@@ -10,6 +10,7 @@ class DailyLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     minutes_spent = Column(Integer, nullable=False)
     date = Column(Date, default=datetime.date.today)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
     notes = Column(String, nullable=True)
 
     completed = Column(Boolean, default=False)

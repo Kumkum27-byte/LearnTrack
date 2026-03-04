@@ -21,6 +21,29 @@ SessionLocal = sessionmaker(
 
 Base = declarative_base()
 
+def ensure_daily_logs_created_at_column():
+    """Add and backfill daily_logs.created_at for existing SQLite databases."""
+    if engine.dialect.name != "sqlite":
+        return
+
+    with engine.begin() as connection:
+        columns = connection.exec_driver_sql("PRAGMA table_info(daily_logs)").fetchall()
+        column_names = {str(col[1]).lower() for col in columns}
+
+        if "created_at" not in column_names:
+            connection.exec_driver_sql("ALTER TABLE daily_logs ADD COLUMN created_at DATETIME")
+
+        connection.exec_driver_sql(
+            """
+            UPDATE daily_logs
+            SET created_at = COALESCE(created_at, CASE
+                WHEN date IS NOT NULL THEN date || ' 00:00:00'
+                ELSE CURRENT_TIMESTAMP
+            END)
+            WHERE created_at IS NULL
+            """
+        )
+
 def get_db():
     db = SessionLocal()
     try:

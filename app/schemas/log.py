@@ -17,7 +17,9 @@ class LogComplete(BaseModel):
 class LogResponse(BaseModel):
     id : int
     date : date
+    created_at: datetime
     minutes_spent : int
+    completed: bool
     notes: Optional[str] = None
 
     model_config = {

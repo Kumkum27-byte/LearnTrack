@@ -10,7 +10,7 @@
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
     </script>
-    <script src="script.js?v=20260304-6" defer></script>
+    <script src="script.js?v=20260304-17" defer></script>
 </head>
 <body>
     <div class="dashboard-container">
@@ -101,7 +101,7 @@
                 </div>
 
                 <div class="card quick-log-card">
-                    <h3>Today's Learning Log</h3>
+                    <h3>What You Have Learned ?</h3>
                     <form class="quick-log-form" id="quickLogForm">
                         <div class="form-field">
                             <label>Category</label>
@@ -115,6 +115,18 @@
                         </div>
                         <button type="submit" class="btn-save-quick">Save Log</button>
                     </form>
+                </div>
+            </section>
+
+            <!-- My Logs Split View -->
+            <section class="logs-section" style="margin-bottom: 1.5rem;">
+                <div class="card recent-activity-card">
+                    <h3>Logs You Created</h3>
+                    <div id="logsContainer" class="logs-list"></div>
+                </div>
+                <div class="card recent-activity-card" style="margin-top: 1rem;">
+                    <h3>What You Have Learned ?</h3>
+                    <div id="learnedContainer" class="logs-list"></div>
                 </div>
             </section>
 

@@ -51,6 +51,70 @@ function toDateString(date) {
     return `${year}-${month}-${day}`;
 }
 
+function parseAppDate(dateInput) {
+    if (dateInput instanceof Date) {
+        return new Date(dateInput.getTime());
+    }
+
+    if (typeof dateInput === 'number') {
+        return new Date(dateInput);
+    }
+
+    if (typeof dateInput !== 'string') {
+        return new Date(dateInput);
+    }
+
+    const value = dateInput.trim();
+    if (!value) return new Date(NaN);
+
+    // Date-only strings should be treated as local calendar date.
+    const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (dateOnlyMatch) {
+        const year = Number(dateOnlyMatch[1]);
+        const month = Number(dateOnlyMatch[2]) - 1;
+        const day = Number(dateOnlyMatch[3]);
+        return new Date(year, month, day, 12, 0, 0, 0);
+    }
+
+    // Naive datetime from backend (no timezone) is treated as UTC.
+    const hasExplicitTimezone = /[zZ]|[+-]\d{2}:?\d{2}$/.test(value);
+    const looksLikeDateTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value);
+    if (looksLikeDateTime && !hasExplicitTimezone) {
+        return new Date(`${value}Z`);
+    }
+
+    return new Date(value);
+}
+
+function formatDateOnly(dateInput) {
+    const value = parseAppDate(dateInput);
+    if (Number.isNaN(value.getTime())) return '';
+    return value.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
+function formatDateTime(dateInput) {
+    if (!dateInput) return '';
+    const value = parseAppDate(dateInput);
+    if (Number.isNaN(value.getTime())) return '';
+    return value.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
+}
+
+function isLegacyDefaultTaskTitle(title) {
+    const normalized = String(title || '').trim().toLowerCase();
+    return normalized === 'random5' || normalized === 'random 5';
+}
+
 function parseJwtPayload(token) {
     try {
         const base64Url = token.split('.')[1];
@@ -80,6 +144,26 @@ function deserializeNotes(notesText) {
     } catch {
         return { reflection: notesText };
     }
+}
+
+function normalizeEntryType(entryType) {
+    return String(entryType || '').toLowerCase() === 'learned' ? 'learned' : 'log';
+}
+
+function inferEntryType(details, backendItem) {
+    const declared = normalizeEntryType(details?.entryType);
+    if (details?.entryType) return declared;
+
+    const topic = String(details?.topic || '').trim();
+    const reflection = String(details?.reflection || '').trim();
+    const proof = String(details?.proof || '').trim();
+    const minutesSpent = Number(backendItem?.minutes_spent || 0);
+
+    if (!topic && reflection && !proof && minutesSpent === 60) {
+        return 'learned';
+    }
+
+    return 'log';
 }
 
 function dedupeMyLogsSections() {
@@ -284,6 +368,7 @@ async function syncLogsFromBackend() {
 
     const mappedLogs = (backendLogs || []).map(item => {
         const details = deserializeNotes(item.notes);
+        const entryType = inferEntryType(details, item);
         return {
             id: item.id,
             category: details.category || 'Other',
@@ -292,7 +377,9 @@ async function syncLogsFromBackend() {
             reflection: details.reflection || '',
             proof: details.proof || '',
             date: item.date,
-            createdAt: item.date
+            createdAt: item.created_at || item.date,
+            completed: Boolean(item.completed),
+            entryType
         };
     });
 
@@ -615,7 +702,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     {
                         date: payloadDate,
                         minutes_spent: Math.max(1, Math.round(durationHours * 60)),
-                        notes: serializeNotes({ category, topic, reflection, proof })
+                        notes: serializeNotes({ category, topic, reflection, proof, entryType: 'log' })
                     },
                     token
                 );
@@ -627,7 +714,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Show success toast
-            showToast('✨ Learning logged successfully!');
+            showToast('✨ What You Have Learned ? saved successfully!');
             
             // Show celebration notification
             const celebrationToast = document.getElementById('celebrationToast');
@@ -712,7 +799,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Count logs from this week
             const today = new Date();
             const weekStart = new Date(today.setDate(today.getDate() - today.getDay()));
-            const weekLogs = logs.filter(log => new Date(log.date) >= weekStart).length;
+            const weekLogs = logs.filter(log => parseAppDate(log.date) >= weekStart).length;
             
             const goal = Math.min(weekLogs, 5);
             goalProgress.textContent = `${goal}/5`;
@@ -752,15 +839,17 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const logsByDate = {};
         logs.forEach(log => {
-            const date = new Date(log.date).toDateString();
-            logsByDate[date] = true;
+            const dateKey = toDateKey(log.date);
+            if (dateKey) {
+                logsByDate[dateKey] = true;
+            }
         });
 
         let streak = 0;
         let currentDate = new Date();
         
         while (true) {
-            const dateStr = currentDate.toDateString();
+            const dateStr = toDateKey(currentDate);
             if (logsByDate[dateStr]) {
                 streak++;
                 currentDate.setDate(currentDate.getDate() - 1);
@@ -846,7 +935,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             category,
                             topic: '',
                             reflection,
-                            proof: ''
+                            proof: '',
+                            entryType: 'learned'
                         })
                     },
                     token
@@ -860,7 +950,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // Reset form and reload
             quickLogForm.reset();
-            showToast('✅ Learning logged successfully!');
+            showToast('✅ What You Have Learned ? saved successfully!');
             refreshDashboardWidgets();
         });
     }
@@ -1077,7 +1167,7 @@ function updateNotificationUI() {
     }
 
     list.innerHTML = notifications.slice(0, 25).map(item => {
-        const timeText = new Date(item.createdAt).toLocaleString();
+        const timeText = formatDateTime(item.createdAt);
         return `
             <div class="notification-item ${item.read ? '' : 'is-unread'}">
                 <div class="notification-item-head">
@@ -1273,10 +1363,18 @@ function runTaskReminderChecks() {
     }
 
     const logs = getStoredJSON('learningLogs', []);
-    const todaysLogs = logs.filter(log => toDateKey(log.date) === todayKey);
-    const todaysTaskEntries = expandLogsToTaskEntries(todaysLogs);
-    const tickMap = getStoredJSON('dailyPlanLogCompletion', {});
-    const untickedCount = todaysTaskEntries.filter(task => !tickMap[String(task.key)]).length;
+    const todaysLogs = logs.filter(log => toDateKey(log.date) === todayKey && normalizeEntryType(log.entryType) === 'log');
+    const todaysTaskEntries = expandLogsToTaskEntries(todaysLogs)
+        .filter(task => !isLegacyDefaultTaskTitle(task.title));
+
+    const pendingLogIds = new Set(
+        todaysLogs
+            .filter(log => !Boolean(log.completed))
+            .map(log => Number(log.id))
+            .filter(id => Number.isFinite(id) && id > 0)
+    );
+
+    const untickedCount = todaysTaskEntries.filter(task => pendingLogIds.has(Number(task.logId))).length;
 
     if (untickedCount > 0) {
         addUserNotification({
@@ -1314,21 +1412,20 @@ function calculateCurrentStreak() {
     if (logs.length === 0) return 0;
 
     // Sort logs by date
-    const sortedLogs = logs.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const sortedLogs = logs.sort((a, b) => parseAppDate(b.date) - parseAppDate(a.date));
     
     // Get unique dates
-    const uniqueDates = [...new Set(sortedLogs.map(log => log.date))].sort((a, b) => new Date(b) - new Date(a));
+    const uniqueDates = [...new Set(sortedLogs.map(log => toDateKey(log.date)).filter(Boolean))].sort((a, b) => parseAppDate(b) - parseAppDate(a));
     
     let streak = 0;
-    const today = new Date().toISOString().split('T')[0];
-    let currentDate = new Date(today);
+    let currentDate = parseAppDate(new Date());
 
     for (const date of uniqueDates) {
-        const logDate = new Date(date);
+        const logDate = parseAppDate(date);
         const expectedDate = new Date(currentDate);
         expectedDate.setDate(expectedDate.getDate() - streak);
 
-        if (logDate.toISOString().split('T')[0] === expectedDate.toISOString().split('T')[0]) {
+        if (toDateKey(logDate) === toDateKey(expectedDate)) {
             streak++;
         } else {
             break;
@@ -1344,14 +1441,14 @@ function calculateLongestStreak() {
     if (logs.length === 0) return 0;
 
     // Get unique dates sorted
-    const uniqueDates = [...new Set(logs.map(log => log.date))].sort();
+    const uniqueDates = [...new Set(logs.map(log => toDateKey(log.date)).filter(Boolean))].sort();
     
     let maxStreak = 1;
     let currentStreak = 1;
 
     for (let i = 1; i < uniqueDates.length; i++) {
-        const prevDate = new Date(uniqueDates[i - 1]);
-        const currentDate = new Date(uniqueDates[i]);
+        const prevDate = parseAppDate(uniqueDates[i - 1]);
+        const currentDate = parseAppDate(uniqueDates[i]);
         const dayDiff = (currentDate - prevDate) / (1000 * 60 * 60 * 24);
 
         if (dayDiff === 1) {
@@ -1483,7 +1580,7 @@ function loadDashboardStats() {
 }
 
 function toDateKey(dateInput) {
-    const date = new Date(dateInput);
+    const date = parseAppDate(dateInput);
     if (Number.isNaN(date.getTime())) return '';
 
     const year = date.getFullYear();
@@ -1621,7 +1718,12 @@ function renderDashboardAnalytics() {
 }
 
 function getSchedules() {
-    return getStoredJSON('learningSchedule', []);
+    const schedules = getStoredJSON('learningSchedule', []);
+    const cleaned = schedules.filter(item => !isLegacyDefaultTaskTitle(item?.title));
+    if (cleaned.length !== schedules.length) {
+        localStorage.setItem('learningSchedule', JSON.stringify(cleaned));
+    }
+    return cleaned;
 }
 
 function saveSchedules(items) {
@@ -1737,143 +1839,108 @@ function renderTodayLearningPlan() {
     if (!planItems) return;
 
     const todayKey = toDateKey(new Date());
-    const schedules = getSchedules();
-    const todayPlans = schedules.filter(item => item.date === todayKey);
     const logs = getStoredJSON('learningLogs', []);
-    const todaysLogs = logs.filter(log => toDateKey(log.date) === todayKey);
-    const todaysTaskEntries = expandLogsToTaskEntries(todaysLogs);
-    const logCompletionById = getStoredJSON('dailyPlanLogCompletion', {});
+    const todaysCreatedLogs = logs
+        .filter(log => toDateKey(log.date) === todayKey && normalizeEntryType(log.entryType) === 'log')
+        .sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
 
-    if (todayPlans.length === 0) {
-        if (todaysTaskEntries.length > 0) {
-            planItems.innerHTML = todaysTaskEntries.map(task => {
-                const label = (task.title || task.category || 'Learning Log').trim();
-                const safeLabel = label.length > 42 ? `${label.slice(0, 42)}...` : label;
-                const logKey = String(task.key || `${task.date}-${safeLabel}`);
-                const isCompleted = Boolean(logCompletionById[logKey]);
-                return `
-                    <label class="plan-item">
-                        <input type="checkbox" data-log-plan-key="${logKey}" ${isCompleted ? 'checked' : ''}>
-                        <span>${safeLabel}</span>
-                        ${task.logId ? `<button type="button" class="scheduled-delete" data-log-delete-id="${task.logId}" title="Delete log">✕</button>` : ''}
-                    </label>
-                `;
-            }).join('');
-
-            const getCompletedLogCount = () => {
-                let completed = 0;
-                todaysTaskEntries.forEach(task => {
-                    const label = (task.title || task.category || 'Learning Log').trim();
-                    const safeLabel = label.length > 42 ? `${label.slice(0, 42)}...` : label;
-                    const logKey = String(task.key || `${task.date}-${safeLabel}`);
-                    if (logCompletionById[logKey]) {
-                        completed++;
-                    }
-                });
-                return completed;
+    const todaysTasks = todaysCreatedLogs
+        .map(log => {
+            const taskTitle = (log.topic || log.reflection || log.category || 'Daily Log Task').trim();
+            return {
+                logId: Number(log.id),
+                title: taskTitle,
+                createdAt: log.createdAt || log.date,
+                duration: Number(log.duration) || 0,
+                completed: Boolean(log.completed)
             };
+        })
+        .filter(task => !isLegacyDefaultTaskTitle(task.title));
 
-            const updateLogSummary = () => {
-                if (!summary) return;
-                const completedCount = getCompletedLogCount();
-                summary.innerHTML = `Completed <strong>${completedCount}/${todaysTaskEntries.length}</strong> learning tasks today ✨`;
-            };
+    const pendingTasks = todaysTasks.filter(task => !task.completed);
+    const completedTasks = todaysTasks.filter(task => task.completed);
 
-            updateLogSummary();
-
-            planItems.querySelectorAll('input[data-log-plan-key]').forEach(checkbox => {
-                checkbox.addEventListener('change', async function() {
-                    const key = this.getAttribute('data-log-plan-key');
-                    if (!key) return;
-
-                    const relatedTask = todaysTaskEntries.find(task => String(task.key) === String(key));
-                    const logId = Number(relatedTask?.logId || 0);
-                    const token = getAuthToken();
-                    const currentUser = getStoredJSON('currentUser', null);
-
-                    if (this.checked && logId > 0) {
-                        if (!token || !currentUser?.id) {
-                            this.checked = false;
-                            showToast('⚠️ Please login first');
-                            return;
-                        }
-
-                        const completedAiMap = getCompletedAiLogMap();
-                        const alreadyCompletedInMap = Boolean(completedAiMap[String(logId)]);
-
-                        if (!alreadyCompletedInMap) {
-                            try {
-                                const completionResult = await completeLogWithAi(logId, token);
-                                completedAiMap[String(logId)] = true;
-                                saveCompletedAiLogMap(completedAiMap);
-
-                                const aiResponse = String(completionResult?.ai_response || '').trim();
-                                if (aiResponse) {
-                                    const shortMessage = aiResponse.length > 140 ? `${aiResponse.slice(0, 140)}...` : aiResponse;
-                                    showToast(`🤖 AI Coach: ${shortMessage}`);
-                                } else {
-                                    showToast('✅ Task completed and synced');
-                                }
-                            } catch (error) {
-                                this.checked = false;
-                                showToast(`❌ ${error.message}`);
-                                return;
-                            }
-                        }
-                    }
-
-                    logCompletionById[key] = this.checked;
-                    localStorage.setItem('dailyPlanLogCompletion', JSON.stringify(logCompletionById));
-                    updateLogSummary();
-                    runTaskReminderChecks();
-                    updateNotificationUI();
-                });
-            });
-
-            planItems.querySelectorAll('button[data-log-delete-id]').forEach(button => {
-                button.addEventListener('click', function(event) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    const logId = Number(this.getAttribute('data-log-delete-id'));
-                    deleteLogEntry(logId);
-                });
-            });
-
-            return;
-        }
-
-        planItems.innerHTML = '<p class="no-schedule">No plan for today. Add tasks in Schedule Planner ✨</p>';
+    if (todaysTasks.length === 0) {
+        planItems.innerHTML = '<p class="no-schedule">No daily logs created for today yet. Add a log to create tasks here ✨</p>';
         if (summary) {
-            summary.innerHTML = "You're all caught up. Add a learning task to get started 🚀";
+            summary.innerHTML = 'No tasks available to tick yet for today.';
         }
         return;
     }
 
-    planItems.innerHTML = todayPlans.map(item => `
-        <label class="plan-item">
-            <input type="checkbox" data-plan-id="${item.id}" ${item.completed ? 'checked' : ''}>
-            <span>${item.title}${item.time ? ` • ${item.time}` : ''}</span>
-        </label>
-    `).join('');
+    planItems.innerHTML = `
+        <div class="plan-log-subtitle">Pending Tasks (Tick when completed)</div>
+        ${pendingTasks.length === 0 ? '<p class="no-schedule">No pending tasks 🎉</p>' : pendingTasks.map(task => {
+            const label = (task.title || 'Daily Log Task').trim();
+            const safeLabel = label.length > 42 ? `${label.slice(0, 42)}...` : label;
+            const spentText = formatHours(task.duration);
+            return `
+                <label class="plan-item">
+                    <input type="checkbox" data-log-id="${task.logId}">
+                    <span>${safeLabel}</span>
+                    <small style="margin-left:auto; color: var(--text-light);">Spent: ${spentText}</small>
+                </label>
+            `;
+        }).join('')}
+        <div class="plan-log-subtitle" style="margin-top: 1rem;">Completed Tasks</div>
+        ${completedTasks.length === 0 ? '<p class="no-schedule">No completed tasks yet.</p>' : completedTasks.map(task => {
+            const label = (task.title || 'Daily Log Task').trim();
+            const safeLabel = label.length > 42 ? `${label.slice(0, 42)}...` : label;
+            const spentText = formatHours(task.duration);
+            return `
+                <label class="plan-item is-completed-log">
+                    <input type="checkbox" checked disabled>
+                    <span>${safeLabel}</span>
+                    <small style="margin-left:auto; color: var(--text-light);">Spent: ${spentText}</small>
+                </label>
+            `;
+        }).join('')}
+    `;
 
-    const completedCount = todayPlans.filter(item => item.completed).length;
+    const completedCount = completedTasks.length;
+
     if (summary) {
-        summary.innerHTML = `Completed <strong>${completedCount}/${todayPlans.length}</strong> tasks today ✨`;
+        summary.innerHTML = `Completed <strong>${completedCount}/${todaysTasks.length}</strong> daily log task${todaysTasks.length > 1 ? 's' : ''} today ✨`;
     }
 
-    planItems.querySelectorAll('input[data-plan-id]').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            const planId = Number(this.getAttribute('data-plan-id'));
-            const updated = schedules.map(item => {
-                if (item.id === planId) {
-                    return { ...item, completed: this.checked };
+    planItems.querySelectorAll('input[data-log-id]').forEach(checkbox => {
+        checkbox.addEventListener('change', async function() {
+            if (!this.checked) return;
+            const logId = Number(this.getAttribute('data-log-id'));
+            if (!logId) return;
+
+            const token = getAuthToken();
+            const currentUser = getStoredJSON('currentUser', null);
+            if (!token || !currentUser?.id) {
+                this.checked = false;
+                showToast('⚠️ Please login first');
+                return;
+            }
+
+            const completedAiMap = getCompletedAiLogMap();
+            const alreadyCompletedInMap = Boolean(completedAiMap[String(logId)]);
+
+            try {
+                if (!alreadyCompletedInMap) {
+                    const completionResult = await completeLogWithAi(logId, token);
+                    completedAiMap[String(logId)] = true;
+                    saveCompletedAiLogMap(completedAiMap);
+
+                    const aiResponse = String(completionResult?.ai_response || '').trim();
+                    if (aiResponse) {
+                        const shortMessage = aiResponse.length > 140 ? `${aiResponse.slice(0, 140)}...` : aiResponse;
+                        showToast(`🤖 AI Coach: ${shortMessage}`);
+                    }
                 }
-                return item;
-            });
-            saveSchedules(updated);
-            renderTodayLearningPlan();
-            runTaskReminderChecks();
-            updateNotificationUI();
+
+                await syncLogsFromBackend();
+                renderTodayLearningPlan();
+                runTaskReminderChecks();
+                updateNotificationUI();
+            } catch (error) {
+                this.checked = false;
+                showToast(`❌ ${error.message}`);
+            }
         });
     });
 }
@@ -1907,32 +1974,40 @@ function renderLearningGoals() {
     const goalsList = document.getElementById('learningGoalsList');
     if (!goalsList) return;
 
-    const logs = getStoredJSON('learningLogs', []);
-    const goalLogs = expandLogsToTaskEntries(logs);
-    if (goalLogs.length === 0) {
-        goalsList.innerHTML = '<p class="no-schedule">No goals yet. Add logs to build your goals automatically ✨</p>';
+    const schedules = getSchedules();
+    const todayKey = toDateKey(new Date());
+    const pendingGoals = schedules
+        .filter(item => !item.completed && item.date && item.date > todayKey)
+        .sort((a, b) => {
+            const aDateTime = new Date(`${a.date}T${a.time || '23:59'}`);
+            const bDateTime = new Date(`${b.date}T${b.time || '23:59'}`);
+            return aDateTime - bDateTime;
+        })
+        .slice(0, 6);
+
+    if (pendingGoals.length === 0) {
+        goalsList.innerHTML = '<p class="no-schedule">No future goals yet. Add upcoming goals in Schedule Planner ✨</p>';
         return;
     }
 
-    goalsList.innerHTML = goalLogs.map((log, index) => {
-        const title = (log.title || 'Learning Session').trim();
+    goalsList.innerHTML = pendingGoals.map((goal) => {
+        const title = (goal.title || 'Learning Goal').trim();
         const displayTitle = title.length > 42 ? `${title.slice(0, 42)}...` : title;
-        const minutes = Math.max(1, Math.round((parseFloat(log.duration) || 0) * 60));
-        const progressPercent = 100;
-        const icon = getCategoryIcon(log.category || 'Other');
-        const dateText = new Date(log.date).toLocaleDateString();
+        const icon = getCategoryIcon(goal.category || 'Other');
+        const dateText = formatDateOnly(goal.date) || (goal.date || '');
+        const timeText = goal.time ? ` • ${goal.time}` : '';
 
         return `
             <div class="goal-item">
                 <div class="goal-header">
                     <span class="goal-icon">${icon}</span>
                     <span class="goal-name">${displayTitle}</span>
-                    ${log.logId ? `<button type="button" class="scheduled-delete" data-goal-delete-id="${log.logId}" title="Delete log">✕</button>` : ''}
+                    <button type="button" class="scheduled-delete" data-goal-delete-id="${goal.id}" title="Delete goal">✕</button>
                 </div>
                 <div class="goal-progress-bar">
-                    <div class="progress" style="width: ${progressPercent}%;"></div>
+                    <div class="progress" style="width: 0%;"></div>
                 </div>
-                <span class="goal-count">${minutes}m • ${dateText}</span>
+                <span class="goal-count">Pending • ${dateText}${timeText}</span>
             </div>
         `;
     }).join('');
@@ -1941,8 +2016,8 @@ function renderLearningGoals() {
         button.addEventListener('click', function(event) {
             event.preventDefault();
             event.stopPropagation();
-            const logId = Number(this.getAttribute('data-goal-delete-id'));
-            deleteLogEntry(logId);
+            const goalId = Number(this.getAttribute('data-goal-delete-id'));
+            deleteSchedule(goalId);
         });
     });
 }
@@ -2099,10 +2174,7 @@ function renderScheduledList() {
     }
 
     listEl.innerHTML = upcoming.map(item => {
-        const dateText = new Date(`${item.date}T00:00:00`).toLocaleDateString(undefined, {
-            month: 'short',
-            day: 'numeric'
-        });
+        const dateText = formatDateOnly(item.date);
 
         return `
             <div class="scheduled-item">
@@ -2187,7 +2259,7 @@ function displayRecentLogs() {
     const recentLogs = logs.slice(-5).reverse();
 
     if (recentLogs.length === 0) {
-        logsList.innerHTML = '<div class="no-logs">No learning logs yet. <a href="log.html">Add your first log</a></div>';
+        logsList.innerHTML = '<div class="no-logs">No "What You Have Learned ?" entries yet. <a href="log.html">Add your first entry</a></div>';
         return;
     }
 
@@ -2195,7 +2267,7 @@ function displayRecentLogs() {
         <div class="log-item">
             <div class="log-header">
                 <span class="log-category">${log.category}</span>
-                <span class="log-date">${new Date(log.date).toLocaleDateString()}</span>
+                <span class="log-date">Spent: ${formatHours(parseFloat(log.duration) || 0)}</span>
             </div>
             ${log.topic ? `<div class="log-topic">${log.topic}</div>` : ''}
             <div class="log-duration">⏱️ ${log.duration} hours</div>
@@ -2208,53 +2280,79 @@ function displayRecentLogs() {
 function displayFilteredLogs(category) {
     const logs = getStoredJSON('learningLogs', []);
     const logsContainer = document.getElementById('logsContainer');
+    const learnedContainer = document.getElementById('learnedContainer');
     const logCount = document.getElementById('logCount');
     
-    if (!logsContainer) return;
+    if (!logsContainer && !learnedContainer) return;
 
     let filteredLogs = logs;
     if (category !== 'All') {
         filteredLogs = logs.filter(log => log.category === category);
     }
 
-    // Sort by date descending
-    filteredLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
+    filteredLogs.sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
 
-    // Update log count
+    const createdLogs = filteredLogs.filter(log => normalizeEntryType(log.entryType) === 'log');
+    const learnedLogs = filteredLogs.filter(log => normalizeEntryType(log.entryType) === 'learned');
+
     if (logCount) {
-        logCount.textContent = `${filteredLogs.length} ${filteredLogs.length === 1 ? 'log' : 'logs'}`;
+        const logLabel = `${createdLogs.length} ${createdLogs.length === 1 ? 'created log' : 'created logs'}`;
+        const learnedLabel = `${learnedLogs.length} ${learnedLogs.length === 1 ? 'learned note' : 'learned notes'}`;
+        logCount.textContent = `${logLabel} • ${learnedLabel}`;
     }
 
-    if (filteredLogs.length === 0) {
+    if (logsContainer && createdLogs.length === 0) {
         logsContainer.innerHTML = `
             <div class="empty-state">
                 <img src="assets/No%20Data%20Yet.png" alt="No learning data yet" class="empty-state-image">
                 <div class="empty-icon">📖</div>
-                <p class="empty-message">No logs found for this category.</p>
+                <p class="empty-message">No created logs found for this category.</p>
                 <p class="empty-submessage">Start your learning journey today!</p>
                 <a href="log.html" class="btn-start-logging">Start Logging →</a>
             </div>
         `;
-        return;
+    } else if (logsContainer) {
+        logsContainer.innerHTML = createdLogs.map(log => `
+            <div class="log-item">
+                <div class="log-header">
+                    <span class="log-category">${getCategoryIcon(log.category)} ${log.category}</span>
+                    <span class="log-date">Spent: ${formatHours(parseFloat(log.duration) || 0)}</span>
+                </div>
+                ${log.topic ? `<div class="log-topic">${log.topic}</div>` : ''}
+                <div class="log-duration">⏱️ ${log.duration} hour${log.duration !== 1 ? 's' : ''}</div>
+                ${log.reflection ? `<div style="color: var(--text-light); margin-top: 0.8rem; font-size: 0.9rem;">💭 <strong>Notes:</strong> ${log.reflection}</div>` : ''}
+                ${log.proof ? `<div style="color: var(--primary-color); margin-top: 0.5rem; font-size: 0.85rem;"><a href="${log.proof}" target="_blank" style="text-decoration: none; font-weight: 600;">🔗 View Proof</a></div>` : ''}
+                <div style="margin-top: 0.75rem; display: flex; justify-content: flex-end;">
+                    <button type="button" class="scheduled-delete" data-history-delete-id="${log.id}" title="Delete log">✕</button>
+                </div>
+            </div>
+        `).join('');
     }
 
-    logsContainer.innerHTML = filteredLogs.map(log => `
-        <div class="log-item">
-            <div class="log-header">
-                <span class="log-category">${getCategoryIcon(log.category)} ${log.category}</span>
-                <span class="log-date">${new Date(log.date).toLocaleDateString()}</span>
+    if (learnedContainer && learnedLogs.length === 0) {
+        learnedContainer.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">🧠</div>
+                <p class="empty-message">No "What We Learned" notes found for this category.</p>
+                <p class="empty-submessage">Use "What You Have Learned ?" to save what you learned.</p>
             </div>
-            ${log.topic ? `<div class="log-topic">${log.topic}</div>` : ''}
-            <div class="log-duration">⏱️ ${log.duration} hour${log.duration !== 1 ? 's' : ''}</div>
-            ${log.reflection ? `<div style="color: var(--text-light); margin-top: 0.8rem; font-size: 0.9rem;">💭 <strong>Notes:</strong> ${log.reflection}</div>` : ''}
-            ${log.proof ? `<div style="color: var(--primary-color); margin-top: 0.5rem; font-size: 0.85rem;"><a href="${log.proof}" target="_blank" style="text-decoration: none; font-weight: 600;">🔗 View Proof</a></div>` : ''}
-            <div style="margin-top: 0.75rem; display: flex; justify-content: flex-end;">
-                <button type="button" class="scheduled-delete" data-history-delete-id="${log.id}" title="Delete log">✕</button>
+        `;
+    } else if (learnedContainer) {
+        learnedContainer.innerHTML = learnedLogs.map(log => `
+            <div class="log-item">
+                <div class="log-header">
+                    <span class="log-category">🧠 ${getCategoryIcon(log.category)} ${log.category}</span>
+                    <span class="log-date">Spent: ${formatHours(parseFloat(log.duration) || 0)}</span>
+                </div>
+                <div class="log-topic">${log.reflection || log.topic || 'Learning note'}</div>
+                <div style="margin-top: 0.75rem; display: flex; justify-content: flex-end;">
+                    <button type="button" class="scheduled-delete" data-history-delete-id="${log.id}" title="Delete learned note">✕</button>
+                </div>
             </div>
-        </div>
-    `).join('');
+        `).join('');
+    }
 
-    logsContainer.querySelectorAll('button[data-history-delete-id]').forEach(button => {
+    document.querySelectorAll('button[data-history-delete-id]').forEach(button => {
         button.addEventListener('click', function(event) {
             event.preventDefault();
             event.stopPropagation();
@@ -2752,7 +2850,7 @@ function addCustomCategory() {
 // ==================== SETTINGS PAGE FUNCTIONS ====================
 
 function confirmResetData() {
-    if (confirm('⚠️ WARNING: This will delete ALL your learning logs and custom categories. This cannot be undone!\n\nAre you absolutely sure?')) {
+    if (confirm('⚠️ WARNING: This will delete ALL your "What You Have Learned ?" entries and custom categories. This cannot be undone!\n\nAre you absolutely sure?')) {
         if (confirm('Last chance! Really delete everything?')) {
             localStorage.setItem('learningLogs', '[]');
             localStorage.setItem('customCategories', '[]');

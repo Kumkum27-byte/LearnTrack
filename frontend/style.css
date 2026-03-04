@@ -6937,6 +6937,21 @@ textarea:focus {
     align-items: stretch !important;
 }
 
+.dashboard-main .plan-goals-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: stretch;
+}
+
+.dashboard-main .plan-goals-row .learning-goals-card {
+    grid-column: 1;
+}
+
+.dashboard-main .plan-goals-row .recent-activity-card {
+    grid-column: 2;
+}
+
 .plan-goals-row .today-plan-card,
 .plan-goals-row .learning-goals-card {
     align-self: stretch !important;
@@ -6948,6 +6963,40 @@ textarea:focus {
 .plan-goals-row .today-plan-card .plan-list,
 .plan-goals-row .learning-goals-card .goals-list {
     flex: 1;
+}
+
+.dashboard-main .plan-goals-row .recent-activity-card {
+    align-self: stretch !important;
+    height: 100% !important;
+    min-height: 460px;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-main .plan-goals-row .learning-goals-card {
+    min-height: 460px;
+}
+
+.dashboard-main .plan-goals-row .learning-goals-card h3,
+.dashboard-main .plan-goals-row .recent-activity-card h3 {
+    margin-bottom: 1rem;
+}
+
+.dashboard-main .plan-goals-row .learning-goals-card .goals-list,
+.dashboard-main .plan-goals-row .recent-activity-card .logs-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    overflow-y: auto;
+    max-height: 360px;
+    padding-right: 0.25rem;
+}
+
+.dashboard-main .plan-goals-row .goal-item,
+.dashboard-main .plan-goals-row .recent-activity-card .log-item {
+    padding: 0.95rem 1rem;
+    line-height: 1.4;
 }
 
 .today-plan-card,

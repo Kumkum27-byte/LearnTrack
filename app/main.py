@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 import fastapi.middleware.cors
 
-from app.database import engine, Base
+from app.database import engine, Base, ensure_daily_logs_created_at_column
 from app.routers.user import router as user_router
 from app.routers.track import router as track_router
 from app.routers.log import router as log_router
@@ -9,6 +9,7 @@ from app.database import Base
 from app.routers import auth
 
 Base.metadata.create_all(bind=engine)
+ensure_daily_logs_created_at_column()
 
 
 #app instance

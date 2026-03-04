@@ -10,7 +10,7 @@
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
     </script>
-    <script src="script.js?v=20260304-6" defer></script>
+    <script src="script.js?v=20260304-17" defer></script>
 </head>
 <body>
     <div class="dashboard-container">
@@ -130,7 +130,7 @@
                         <div class="setting-item">
                             <div class="setting-label">
                                 <h3>Add Custom Category</h3>
-                                <p>Create a new category for your learning logs</p>
+                                <p>Create a new category for your "What You Have Learned ?" entries</p>
                             </div>
                             <div class="category-form">
                                 <input type="text" id="newCategoryInput" placeholder="Enter category name" class="category-input">
@@ -198,7 +198,7 @@
                         <div class="setting-item">
                             <div class="setting-label">
                                 <h3>Reset All Data</h3>
-                                <p>Delete all learning logs and custom categories (Cannot be undone!)</p>
+                                <p>Delete all "What You Have Learned ?" entries and custom categories (Cannot be undone!)</p>
                             </div>
                             <button type="button" class="btn btn-danger" onclick="confirmResetData()">Reset Data</button>
                         </div>
