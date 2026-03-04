@@ -12,4 +12,4 @@ class Streak(Base):
     track_id = Column(Integer, ForeignKey("tracks.id"), unique=True)
 
     # Relationship
-    track = relationship("Track", back_populates="streak")
+    track = relationship("Track", back_populates="streaks")

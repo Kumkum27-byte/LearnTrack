@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.cors import CORSMiddleware
+
 
 from app.database import engine, Base
 from app.routers.user import router as user_router
 from app.routers.track import router as track_router
 from app.routers.log import router as log_router
-from app.models import user, track, daily_log, streak, ai
+from app.database import Base
 from app.routers import auth
 
 Base.metadata.create_all(bind=engine)
@@ -18,15 +18,6 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

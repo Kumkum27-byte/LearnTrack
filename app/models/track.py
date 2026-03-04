@@ -21,4 +21,4 @@ class Track(Base):
     # Relationships
     user = relationship("User", back_populates="tracks")
     daily_logs = relationship("DailyLog", back_populates="track", cascade="all, delete")
-    streak = relationship("Streak", back_populates="track", uselist=False, cascade="all, delete")
+    streaks = relationship("Streak", back_populates="track", lazy="select")
