@@ -1,76 +1,58 @@
-import requests
-import os
-from dotenv import load_dotenv
+import google.generativeai as genai
+from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.ai import AIConversation
 
-load_dotenv()
 
-HF_TOKEN = os.getenv("HF_TOKEN")
+# 🔐 Configure Gemini
+genai.configure(api_key=settings.GEMINI_API_KEY)
 
-API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
-
-headers = {
-    "Authorization": f"Bearer {HF_TOKEN}"
-}
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 
-def call_llm(prompt: str):
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": 200,
-            "temperature": 0.7
-        }
-    }
-
+def call_llm(prompt: str) -> str:
     try:
-        response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-        result = response.json()
+        response = model.generate_content(prompt)
 
-        # Model loading case
-        if isinstance(result, dict) and "error" in result:
-            return "AI model is loading. Try again."
+        if hasattr(response, "text") and response.text:
+            return response.text.strip()
 
-        return result[0]["generated_text"]
+        return "I'm here to support you. How did today's effort feel?"
 
     except Exception as e:
-        return f"Error: {str(e)}"
+        print("Gemini API Error:", e)
+        return "AI is temporarily unavailable. Keep going, you're doing great!"
 
 
-def start_ai_interaction(log, db):
+def start_ai_interaction(log, db: Session) -> str:
+
     prompt = f"""
-    User completed a log:
-    track: {log.track.title}
-    date: {log.date}
-    minutes_spent: {log.minutes_spent}
-    notes: {log.notes}
+    User completed a daily log.
 
-    Act as a friendly AI coach.
-    Ask short reflective questions.
+    Track: {log.track.title}
+    Minutes Spent: {log.minutes_spent}
+    Notes: {log.notes}
+
+    Act as a friendly AI productivity coach.
+    Ask 2 short reflective questions.
+    Keep response under 120 words.
+    Be motivating but not robotic.
     """
 
-    # 1️⃣ Save user/system prompt
-    user_entry = AIConversation(
-        log_id=log.id,
-        user_id=log.track.user_id,
-        role="user",
-        content=prompt
-    )
-    db.add(user_entry)
-    db.commit()
-
-    # 2️⃣ Generate AI reply
+    # 🤖 Call Gemini
     ai_response = call_llm(prompt)
 
-    # 3️⃣ Save AI response
-    ai_entry = AIConversation(
+    # 💾 Store in AIConversation table
+    conversation = AIConversation(
         log_id=log.id,
-        user_id=log.track.user_id,
+        user_id=log.user_id,
         role="assistant",
-        content=ai_response
+        content=ai_response,
+        status="completed"
     )
-    db.add(ai_entry)
+
+    db.add(conversation)
     db.commit()
+    db.refresh(conversation)
 
     return ai_response

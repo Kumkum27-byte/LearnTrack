@@ -1,8 +1,7 @@
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    HF_TOKEN: str
-    DATABASE_URL: str
+    GEMINI_API_KEY: str = "AIzaSyDVIDk7PkUDktJqWOkFKIij_O9S9tpCjQw"
 
     class Config:
         env_file = ".env"
