@@ -310,6 +310,46 @@ async function createOrMergeLog(trackId, payload, token) {
     });
 }
 
+function getCompletedAiLogMap() {
+    return getStoredJSON('completedAiLogMap', {});
+}
+
+function saveCompletedAiLogMap(map) {
+    localStorage.setItem('completedAiLogMap', JSON.stringify(map || {}));
+}
+
+async function completeLogWithAi(logId, token) {
+    if (!logId) return null;
+
+    const headers = {
+        Authorization: `Bearer ${token}`
+    };
+
+    const endpointAttempts = [
+        `/logs/${logId}/complete`,
+        `/logs/logs/${logId}/complete`
+    ];
+
+    let lastError = null;
+    for (const endpoint of endpointAttempts) {
+        try {
+            return await apiRequest(endpoint, {
+                method: 'POST',
+                headers
+            });
+        } catch (error) {
+            const detail = String(error?.message || '').toLowerCase();
+            const maybeRouteMismatch = detail.includes('404') || detail.includes('not found') || detail.includes('405') || detail.includes('method not allowed');
+            lastError = error;
+            if (!maybeRouteMismatch) {
+                throw error;
+            }
+        }
+    }
+
+    throw lastError || new Error('Unable to complete log');
+}
+
 async function deleteLogEntry(logId) {
     if (!logId) return;
 
@@ -1742,9 +1782,45 @@ function renderTodayLearningPlan() {
             updateLogSummary();
 
             planItems.querySelectorAll('input[data-log-plan-key]').forEach(checkbox => {
-                checkbox.addEventListener('change', function() {
+                checkbox.addEventListener('change', async function() {
                     const key = this.getAttribute('data-log-plan-key');
                     if (!key) return;
+
+                    const relatedTask = todaysTaskEntries.find(task => String(task.key) === String(key));
+                    const logId = Number(relatedTask?.logId || 0);
+                    const token = getAuthToken();
+                    const currentUser = getStoredJSON('currentUser', null);
+
+                    if (this.checked && logId > 0) {
+                        if (!token || !currentUser?.id) {
+                            this.checked = false;
+                            showToast('⚠️ Please login first');
+                            return;
+                        }
+
+                        const completedAiMap = getCompletedAiLogMap();
+                        const alreadyCompletedInMap = Boolean(completedAiMap[String(logId)]);
+
+                        if (!alreadyCompletedInMap) {
+                            try {
+                                const completionResult = await completeLogWithAi(logId, token);
+                                completedAiMap[String(logId)] = true;
+                                saveCompletedAiLogMap(completedAiMap);
+
+                                const aiResponse = String(completionResult?.ai_response || '').trim();
+                                if (aiResponse) {
+                                    const shortMessage = aiResponse.length > 140 ? `${aiResponse.slice(0, 140)}...` : aiResponse;
+                                    showToast(`🤖 AI Coach: ${shortMessage}`);
+                                } else {
+                                    showToast('✅ Task completed and synced');
+                                }
+                            } catch (error) {
+                                this.checked = false;
+                                showToast(`❌ ${error.message}`);
+                                return;
+                            }
+                        }
+                    }
 
                     logCompletionById[key] = this.checked;
                     localStorage.setItem('dailyPlanLogCompletion', JSON.stringify(logCompletionById));

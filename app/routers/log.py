@@ -10,6 +10,7 @@ from app.services.ai import start_ai_interaction
 from app.database import get_db
 from app.models import track
 from app.models.daily_log import DailyLog
+from app.models.ai import AIConversation
 from app.schemas.log import LogCreate, LogResponse, LogUpdate, LogComplete
 
 router = APIRouter(
@@ -193,7 +194,11 @@ def delete_daily_log_via_post(
 
 #Log completion detection
 @router.post("/{log_id}/complete")
-def complete_log(log_id: int, db: Session = Depends(get_db)):
+def complete_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     
     # 🔎 Get log
     log = db.query(DailyLog).filter(DailyLog.id == log_id).first()
@@ -201,15 +206,27 @@ def complete_log(log_id: int, db: Session = Depends(get_db)):
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
 
+    track = db.query(Track).filter(Track.id == log.track_id).first()
+    if not track or track.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    existing_ai = db.query(AIConversation).filter(
+        AIConversation.log_id == log.id,
+        AIConversation.role == "assistant"
+    ).order_by(desc(AIConversation.created_at)).first()
+
+    if log.completed and existing_ai:
+        return {
+            "message": "Log already completed",
+            "log_id": log.id,
+            "ai_response": existing_ai.content
+        }
+
     # ✅ Mark as completed
     log.completed = True
-    log.completed_at = datetime.utcnow()
 
     # 🤖 Call AI
     ai_response = start_ai_interaction(log, db)
-
-    # 💾 Store AI response in DB
-    log.ai_response = ai_response
 
     db.commit()
     db.refresh(log)
