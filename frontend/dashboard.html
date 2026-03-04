@@ -11,7 +11,7 @@
         document.documentElement.setAttribute('data-theme', savedTheme);
     </script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
-    <script src="script.js" defer></script>
+    <script src="script.js?v=20260304-6" defer></script>
 </head>
 <body>
     <div class="dashboard-container">
@@ -29,7 +29,7 @@
                 </a>
                 <a href="history.html" class="nav-link">
                     <span class="nav-icon">📋</span>
-                    <span>History</span>
+                    <span>My Logs</span>
                 </a>
                 <a href="settings.html" class="nav-link">
                     <span class="nav-icon">⚙️</span>
@@ -73,8 +73,8 @@
                         <button class="theme-toggle-home theme-toggle-global" onclick="toggleTheme()" title="Toggle dark/light theme">
                             <span class="theme-icon">🌙</span>
                         </button>
-                        <button class="notification-btn">
-                            <span class="notification-badge">1</span>
+                        <button class="notification-btn" aria-label="Notifications">
+                            <span class="notification-badge" style="display: none;">0</span>
                             🔔
                         </button>
                         <div class="user-profile-wrapper">
@@ -183,55 +183,14 @@
                         </div>
 
                         <div class="plan-goals-row">
-                            <div class="card today-plan-card">
-                                <h3>Today's Learning Plan</h3>
-                                <div class="plan-list" id="planItems">
-                                    <label class="plan-item">
-                                        <input type="checkbox">
-                                        <span>Review Graph Traversal</span>
-                                    </label>
-                                    <label class="plan-item">
-                                        <input type="checkbox">
-                                        <span>Solve dynamic programming problem</span>
-                                    </label>
-                                </div>
-                                <p class="streak-message">You're <strong>2 days</strong> away from beating your longest streak! ✨</p>
-                            </div>
-
                             <div class="card learning-goals-card">
                                 <h3>Learning Goals</h3>
-                                <div class="goals-list">
-                                    <div class="goal-item">
-                                        <div class="goal-header">
-                                            <span class="goal-icon">🎯</span>
-                                            <span class="goal-name">Master DSA</span>
-                                        </div>
-                                        <div class="goal-progress-bar">
-                                            <div class="progress" style="width: 60%;"></div>
-                                        </div>
-                                        <span class="goal-count">2/6</span>
-                                    </div>
-                                    <div class="goal-item">
-                                        <div class="goal-header">
-                                            <span class="goal-icon">⚛️</span>
-                                            <span class="goal-name">React.js Fundamentals</span>
-                                        </div>
-                                        <div class="goal-progress-bar">
-                                            <div class="progress" style="width: 42%;"></div>
-                                        </div>
-                                        <span class="goal-count">3/7</span>
-                                    </div>
-                                    <div class="goal-item">
-                                        <div class="goal-header">
-                                            <span class="goal-icon">🧠</span>
-                                            <span class="goal-name">Learn Machine Learning</span>
-                                        </div>
-                                        <div class="goal-progress-bar">
-                                            <div class="progress" style="width: 20%;"></div>
-                                        </div>
-                                        <span class="goal-count">1/5</span>
-                                    </div>
-                                </div>
+                                <div class="goals-list" id="learningGoalsList"></div>
+                            </div>
+
+                            <div class="card recent-activity-card">
+                                <h3>Recent Learning Activity</h3>
+                                <div class="logs-list" id="logsList"></div>
                             </div>
                         </div>
                     </div>
@@ -277,28 +236,6 @@
                         </div>
                     </div>
 
-                    <!-- Today's Learning Log -->
-                    <div class="card quick-log-card">
-                        <h3>Today's Learning Log</h3>
-                        <form class="quick-log-form" id="quickLogForm">
-                            <div class="form-field">
-                                <label>Category</label>
-                                <select id="quickCategory" required>
-                                    <option value="">Select Category</option>
-                                    <option value="DSA">DSA</option>
-                                    <option value="Web">Web Dev</option>
-                                    <option value="ML">Machine Learning</option>
-                                    <option value="Other">Other</option>
-                                </select>
-                            </div>
-                            <div class="form-field">
-                                <label>What did you learn?</label>
-                                <textarea id="quickTopic" placeholder="e.g., Practiced recursion problems" rows="3"></textarea>
-                            </div>
-                            <button type="submit" class="btn-save-quick">Save Log</button>
-                        </form>
-                    </div>
-
                     <!-- Stats Cards -->
                     <div class="card stats-card">
                         <div class="stat">
@@ -330,11 +267,6 @@
                         </div>
                     </div>
 
-                    <!-- Recent Activity -->
-                    <div class="card recent-activity-card">
-                        <h3>Recent Learning Activity</h3>
-                        <div class="logs-list" id="logsList"></div>
-                    </div>
                 </div>
             </div>
         </main>

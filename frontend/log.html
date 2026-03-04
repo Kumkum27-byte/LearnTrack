@@ -10,7 +10,7 @@
         const savedTheme = localStorage.getItem('theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
     </script>
-    <script src="script.js" defer></script>
+    <script src="script.js?v=20260304-6" defer></script>
 </head>
 <body>
     <div class="dashboard-container">
@@ -20,7 +20,7 @@
             <nav class="sidebar-nav">
                 <a href="dashboard.html" class="nav-link">📊 Dashboard</a>
                 <a href="log.html" class="nav-link active">➕ Add Learning</a>
-                <a href="history.html" class="nav-link">📋 History</a>
+                <a href="history.html" class="nav-link">📋 My Logs</a>
                 <a href="settings.html" class="nav-link">⚙️ Settings</a>
                 <a href="index.html" class="nav-link">🏠 Home</a>
                 <a href="index.html#features" class="nav-link">✨ Features</a>
@@ -126,14 +126,7 @@
                             <!-- Title/Topic -->
                             <div class="form-group">
                                 <label for="topic">Title / Topic</label>
-                                <input type="text" id="topic" placeholder="Learned Binary Search Trees" required>
-                                
-                                <!-- Quick Tags -->
-                                <div class="quick-tags-section">
-                                    <div class="quick-tags" id="quickTags">
-                                        <!-- Tags will be generated dynamically -->
-                                    </div>
-                                </div>
+                                <input type="text" id="topic" placeholder="Enter title/topic" required>
                             </div>
 
                             <!-- Duration -->
@@ -157,16 +150,22 @@
                                 </div>
                             </div>
 
+                            <!-- Learning Date -->
+                            <div class="form-group">
+                                <label for="logDate">Learning Date</label>
+                                <input type="date" id="logDate" required>
+                            </div>
+
                             <!-- Proof / Link -->
                             <div class="form-group">
                                 <label for="learningDate">Proof / Link <span class="optional">(optional)</span></label>
                                 <input type="text" id="learningDate" placeholder="e.g. GitHub commit URL or blog post link">
                             </div>
 
-                            <!-- Reflection/Notes -->
+                            <!-- Notes -->
                             <div class="form-group">
-                                <label for="reflection">Reflection (What did you learn?)</label>
-                                <textarea id="reflection" rows="3" placeholder="Share your thoughts, learnings, and challenges..."></textarea>
+                                <label for="reflection">Notes</label>
+                                <textarea id="reflection" rows="3" placeholder="Write your notes..."></textarea>
                             </div>
 
                             <!-- Progress Bar -->

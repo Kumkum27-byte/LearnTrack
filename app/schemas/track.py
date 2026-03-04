@@ -13,10 +13,11 @@ class TrackResponse(BaseModel):
     end_date : date
     status : str
 
+    model_config = {
+        "from_attributes": True
+    }
+
 class TrackUpdate(BaseModel):
     title: str
     start_date : date
     end_date : date
-
-class Config:
-    from_attributes = True

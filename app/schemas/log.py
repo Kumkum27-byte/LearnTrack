@@ -20,6 +20,6 @@ class LogResponse(BaseModel):
     minutes_spent : int
     notes: Optional[str] = None
 
-model_config = {
-    "from_attributes" : True
-}
+    model_config = {
+        "from_attributes" : True
+    }

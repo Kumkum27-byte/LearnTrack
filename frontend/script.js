@@ -16,7 +16,29 @@ function getStoredJSON(key, fallback) {
 let weeklyTrendChartInstance = null;
 let categorySplitChartInstance = null;
 let schedulerMonthDate = new Date();
-const API_BASE_URL = localStorage.getItem('apiBaseUrl') || 'http://127.0.0.1:8000';
+let reminderIntervalId = null;
+const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8000';
+const NOTIFICATIONS_STORAGE_KEY = 'growlogNotifications';
+const REMINDER_STATE_STORAGE_KEY = 'growlogReminderState';
+const NOTIFICATION_PERMISSION_PROMPTED_KEY = 'growlogNotificationPermissionPrompted';
+const NOTIFICATION_PERMISSION_WELCOME_KEY = 'growlogNotificationWelcomeShown';
+
+function normalizeApiBaseUrl(url) {
+    if (!url || typeof url !== 'string') return '';
+    return url.trim().replace(/\/+$/, '');
+}
+
+let API_BASE_URL = normalizeApiBaseUrl(localStorage.getItem('apiBaseUrl')) || DEFAULT_API_BASE_URL;
+
+function getApiBaseUrlCandidates() {
+    const candidates = [
+        API_BASE_URL,
+        DEFAULT_API_BASE_URL,
+        'http://localhost:8000'
+    ].map(normalizeApiBaseUrl).filter(Boolean);
+
+    return [...new Set(candidates)];
+}
 
 function getAuthToken() {
     return localStorage.getItem('authToken') || '';
@@ -60,21 +82,141 @@ function deserializeNotes(notesText) {
     }
 }
 
-async function apiRequest(endpoint, options = {}) {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-    if (!response.ok) {
-        let message = `Request failed (${response.status})`;
-        try {
-            const errorData = await response.json();
-            message = errorData.detail || errorData.message || message;
-        } catch {
-            // Ignore parse failure and keep fallback message.
-        }
-        throw new Error(message);
+function dedupeMyLogsSections() {
+    const currentPage = (window.location.pathname.split('/').pop() || '').toLowerCase();
+    if (currentPage !== 'history.html') return;
+
+    const planCards = document.querySelectorAll('.today-plan-card');
+    if (planCards.length > 1) {
+        planCards.forEach((card, index) => {
+            if (index > 0) {
+                card.remove();
+            }
+        });
     }
 
-    if (response.status === 204) return null;
-    return response.json();
+    const quickLogCards = document.querySelectorAll('.quick-log-card');
+    if (quickLogCards.length > 1) {
+        quickLogCards.forEach((card, index) => {
+            if (index > 0) {
+                card.remove();
+            }
+        });
+    }
+}
+
+function updateLandingNavbarAuthState() {
+    const navLinks = document.querySelector('.navbar .nav-links');
+    if (!navLinks) return;
+
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    const currentUser = getStoredJSON('currentUser', null);
+    const authToken = getAuthToken();
+
+    const loginLink = navLinks.querySelector('.btn-nav-login');
+    const signupLink = navLinks.querySelector('.btn-nav-signup');
+
+    if (!(isLoggedIn && currentUser && authToken)) {
+        // Ensure Login / Sign Up are visible for logged-out users
+        if (!loginLink) {
+            const loginEl = document.createElement('a');
+            loginEl.href = 'login.html';
+            loginEl.className = 'btn-nav-login';
+            loginEl.textContent = 'Log In';
+            navLinks.appendChild(loginEl);
+        }
+
+        if (!signupLink) {
+            const signupEl = document.createElement('a');
+            signupEl.href = 'signup.html';
+            signupEl.className = 'btn-nav-signup';
+            signupEl.textContent = 'Sign Up';
+            navLinks.appendChild(signupEl);
+        }
+
+        navLinks.querySelectorAll('[data-auth-only="true"]').forEach(el => el.remove());
+        return;
+    }
+
+    // Hide Login / Sign Up when authenticated
+    if (loginLink) loginLink.remove();
+    if (signupLink) signupLink.remove();
+
+    if (navLinks.querySelector('[data-auth-only="true"]')) return;
+
+    const dashboardLink = document.createElement('a');
+    dashboardLink.href = 'dashboard.html';
+    dashboardLink.textContent = 'Dashboard';
+    dashboardLink.setAttribute('data-auth-only', 'true');
+
+    const logsLink = document.createElement('a');
+    logsLink.href = 'history.html';
+    logsLink.textContent = 'My Logs';
+    logsLink.setAttribute('data-auth-only', 'true');
+
+    const logoutLink = document.createElement('a');
+    logoutLink.href = '#';
+    logoutLink.className = 'btn-nav-login';
+    logoutLink.textContent = 'Logout';
+    logoutLink.setAttribute('data-auth-only', 'true');
+    logoutLink.addEventListener('click', function(event) {
+        event.preventDefault();
+        logout();
+    });
+
+    navLinks.appendChild(dashboardLink);
+    navLinks.appendChild(logsLink);
+    navLinks.appendChild(logoutLink);
+}
+
+async function apiRequest(endpoint, options = {}) {
+    const candidates = getApiBaseUrlCandidates();
+    let lastNetworkError = null;
+
+    for (const baseUrl of candidates) {
+        let response;
+        try {
+            response = await fetch(`${baseUrl}${endpoint}`, options);
+        } catch (networkError) {
+            lastNetworkError = networkError;
+            continue;
+        }
+
+        if (!response.ok) {
+            let message = `Request failed (${response.status})`;
+            let errorDetail = '';
+            try {
+                const errorData = await response.json();
+                errorDetail = (errorData.detail || errorData.message || '').toString();
+                message = errorDetail || message;
+            } catch {
+                // Ignore parse failure and keep fallback message.
+            }
+
+            const isInvalidAuth = response.status === 401 && /invalid authentication credentials/i.test(errorDetail || message);
+            if (isInvalidAuth) {
+                localStorage.removeItem('isLoggedIn');
+                localStorage.removeItem('currentUser');
+                localStorage.removeItem('userEmail');
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('currentTrackId');
+                throw new Error('Session expired. Please login again.');
+            }
+
+            throw new Error(message);
+        }
+
+        if (baseUrl !== API_BASE_URL) {
+            API_BASE_URL = baseUrl;
+            localStorage.setItem('apiBaseUrl', baseUrl);
+        }
+
+        if (response.status === 204) return null;
+        return response.json();
+    }
+
+    console.error('Network error while calling API endpoint:', endpoint, lastNetworkError);
+    throw new Error('Failed to fetch. Please make sure backend server is running on http://127.0.0.1:8000 (or localhost:8000).');
 }
 
 async function fetchCurrentUserFromToken(token) {
@@ -145,7 +287,7 @@ async function syncLogsFromBackend() {
         return {
             id: item.id,
             category: details.category || 'Other',
-            topic: details.topic || 'Learning Session',
+            topic: details.topic || '',
             duration: Number(((item.minutes_spent || 0) / 60).toFixed(2)),
             reflection: details.reflection || '',
             proof: details.proof || '',
@@ -157,8 +299,150 @@ async function syncLogsFromBackend() {
     localStorage.setItem('learningLogs', JSON.stringify(mappedLogs));
 }
 
+async function createOrMergeLog(trackId, payload, token) {
+    return apiRequest(`/logs/${trackId}`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+}
+
+function getCompletedAiLogMap() {
+    return getStoredJSON('completedAiLogMap', {});
+}
+
+function saveCompletedAiLogMap(map) {
+    localStorage.setItem('completedAiLogMap', JSON.stringify(map || {}));
+}
+
+async function completeLogWithAi(logId, token) {
+    if (!logId) return null;
+
+    const headers = {
+        Authorization: `Bearer ${token}`
+    };
+
+    const endpointAttempts = [
+        `/logs/${logId}/complete`,
+        `/logs/logs/${logId}/complete`
+    ];
+
+    let lastError = null;
+    for (const endpoint of endpointAttempts) {
+        try {
+            return await apiRequest(endpoint, {
+                method: 'POST',
+                headers
+            });
+        } catch (error) {
+            const detail = String(error?.message || '').toLowerCase();
+            const maybeRouteMismatch = detail.includes('404') || detail.includes('not found') || detail.includes('405') || detail.includes('method not allowed');
+            lastError = error;
+            if (!maybeRouteMismatch) {
+                throw error;
+            }
+        }
+    }
+
+    throw lastError || new Error('Unable to complete log');
+}
+
+async function deleteLogEntry(logId) {
+    if (!logId) return;
+
+    const confirmed = confirm('Delete this log? This action cannot be undone.');
+    if (!confirmed) return;
+
+    const token = getAuthToken();
+    const currentUser = getStoredJSON('currentUser', null);
+    if (!token || !currentUser?.id) {
+        showToast('⚠️ Please login first');
+        return;
+    }
+
+    const removeDeletedLogFromLocalState = () => {
+        const logs = getStoredJSON('learningLogs', []);
+        const remainingLogs = logs.filter(log => Number(log.id) !== Number(logId));
+        localStorage.setItem('learningLogs', JSON.stringify(remainingLogs));
+
+        const completionMap = getStoredJSON('dailyPlanLogCompletion', {});
+        const cleanedCompletionMap = {};
+        Object.entries(completionMap).forEach(([key, value]) => {
+            if (!String(key).startsWith(`${logId}-`)) {
+                cleanedCompletionMap[key] = value;
+            }
+        });
+        localStorage.setItem('dailyPlanLogCompletion', JSON.stringify(cleanedCompletionMap));
+    };
+
+    try {
+        const headers = {
+            Authorization: `Bearer ${token}`
+        };
+
+        const deleteAttempts = [
+            { endpoint: `/logs/${logId}`, method: 'DELETE' },
+            { endpoint: `/logs/logs/${logId}`, method: 'DELETE' },
+            { endpoint: `/logs/${logId}/delete`, method: 'POST' },
+            { endpoint: `/logs/logs/${logId}/delete`, method: 'POST' }
+        ];
+        let deleteSucceeded = false;
+        let lastDeleteError = null;
+
+        for (const attempt of deleteAttempts) {
+            try {
+                await apiRequest(attempt.endpoint, {
+                    method: attempt.method,
+                    headers
+                });
+                deleteSucceeded = true;
+                break;
+            } catch (error) {
+                const detail = String(error?.message || '').toLowerCase();
+                const maybeRouteMismatch =
+                    detail.includes('404')
+                    || detail.includes('not found')
+                    || detail.includes('405')
+                    || detail.includes('method not allowed');
+
+                lastDeleteError = error;
+                if (!maybeRouteMismatch) {
+                    throw error;
+                }
+            }
+        }
+
+        if (!deleteSucceeded) {
+            throw lastDeleteError || new Error('Unable to delete log');
+        }
+
+        removeDeletedLogFromLocalState();
+
+        try {
+            await syncLogsFromBackend();
+        } catch (syncError) {
+            console.warn('Delete succeeded but sync failed; using local state.', syncError);
+        }
+
+        refreshDashboardWidgets();
+        const categoryFilter = document.getElementById('categoryFilter');
+        if (categoryFilter) {
+            displayFilteredLogs(categoryFilter.value || 'All');
+        }
+        showToast('🗑️ Log deleted successfully');
+    } catch (error) {
+        showToast(`❌ ${error.message}`);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ LearnTrack - DOM Loaded - Script Initialized');
+    dedupeMyLogsSections();
+    updateLandingNavbarAuthState();
+    initializeTaskNotifications();
     
     // Initialize user profile and theme
     initializeUserProfile();
@@ -281,33 +565,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     const logForm = document.getElementById('logForm');
     if (logForm) {
-        // Initialize quick tags
-        const quickTagsContainer = document.getElementById('quickTags');
-        const quickTags = ['Arrays', 'React', 'Algorithms', 'APIs', 'Database', 'Testing'];
-        
-        if (quickTagsContainer) {
-            quickTags.forEach(tag => {
-                const tagElement = document.createElement('button');
-                tagElement.type = 'button';
-                tagElement.className = 'quick-tag';
-                tagElement.textContent = tag;
-                tagElement.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const topicInput = document.getElementById('topic');
-                    if (!topicInput) {
-                        console.warn('Topic input not found while applying quick tag.');
-                        return;
-                    }
-                    const currentText = topicInput.value.trim();
-                    if (currentText) {
-                        topicInput.value = currentText + ' - ' + tag;
-                    } else {
-                        topicInput.value = tag;
-                    }
-                    updateFormProgress();
-                });
-                quickTagsContainer.appendChild(tagElement);
-            });
+        const logDateInput = document.getElementById('logDate');
+        if (logDateInput && !logDateInput.value) {
+            logDateInput.value = toDateString(new Date());
         }
 
         // Update form progress as user fills fields
@@ -323,11 +583,12 @@ document.addEventListener('DOMContentLoaded', function() {
             const category = document.getElementById('category')?.value;
             const topic = document.getElementById('topic')?.value?.trim();
             const duration = document.getElementById('duration')?.value;
+            const logDate = document.getElementById('logDate')?.value;
             const reflection = document.getElementById('reflection')?.value?.trim();
             const proof = document.getElementById('learningDate')?.value?.trim();
 
             // Validation
-            if (!category || !topic || !duration) {
+            if (!category || !topic || !duration || !logDate) {
                 showToast('❌ Please fill in all required fields');
                 return;
             }
@@ -346,21 +607,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
             try {
                 const trackId = await ensurePrimaryTrack(currentUser.id, token);
-                const payloadDate = new Date().toISOString().split('T')[0];
+                const payloadDate = logDate;
                 const durationHours = parseFloat(duration) || 0;
 
-                await apiRequest(`/logs/${trackId}`, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
+                await createOrMergeLog(
+                    trackId,
+                    {
                         date: payloadDate,
                         minutes_spent: Math.max(1, Math.round(durationHours * 60)),
                         notes: serializeNotes({ category, topic, reflection, proof })
-                    })
-                });
+                    },
+                    token
+                );
 
                 await syncLogsFromBackend();
             } catch (error) {
@@ -387,6 +645,10 @@ document.addEventListener('DOMContentLoaded', function() {
             
             setTimeout(() => {
                 logForm.reset();
+                const dateInput = document.getElementById('logDate');
+                if (dateInput) {
+                    dateInput.value = toDateString(new Date());
+                }
                 updateFormProgress();
             }, 500);
         });
@@ -423,15 +685,17 @@ document.addEventListener('DOMContentLoaded', function() {
         const category = document.getElementById('category')?.value;
         const topic = document.getElementById('topic')?.value?.trim();
         const duration = document.getElementById('duration')?.value;
+        const logDate = document.getElementById('logDate')?.value;
         const reflection = document.getElementById('reflection')?.value?.trim();
 
         let filled = 0;
         if (category) filled++;
         if (topic) filled++;
         if (duration) filled++;
+        if (logDate) filled++;
         if (reflection) filled++;
 
-        const progress = (filled / 4) * 100;
+        const progress = (filled / 5) * 100;
         const progressFill = document.getElementById('formProgress');
         if (progressFill) {
             progressFill.style.width = progress + '%';
@@ -528,9 +792,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
         syncLogsFromBackend()
             .then(() => {
-                loadDashboardStats();
-                displayRecentLogs();
-                renderDashboardAnalytics();
+                refreshDashboardWidgets();
             })
             .catch(error => {
                 console.warn('Failed to sync logs from backend:', error.message);
@@ -544,10 +806,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Load and display dashboard data
-    loadDashboardStats();
-    displayRecentLogs();
-    renderDashboardAnalytics();
+    refreshDashboardWidgets();
     initializeScheduler();
+    renderTodayLearningPlan();
 
     // Quick log form handler on dashboard
     const quickLogForm = document.getElementById('quickLogForm');
@@ -576,23 +837,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
             try {
                 const trackId = await ensurePrimaryTrack(currentUser.id, token);
-                await apiRequest(`/logs/${trackId}`, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
+                await createOrMergeLog(
+                    trackId,
+                    {
                         date: new Date().toISOString().split('T')[0],
                         minutes_spent: 60,
                         notes: serializeNotes({
                             category,
-                            topic: 'Quick Log',
+                            topic: '',
                             reflection,
                             proof: ''
                         })
-                    })
-                });
+                    },
+                    token
+                );
 
                 await syncLogsFromBackend();
             } catch (error) {
@@ -603,9 +861,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Reset form and reload
             quickLogForm.reset();
             showToast('✅ Learning logged successfully!');
-            loadDashboardStats();
-            displayRecentLogs();
-            renderDashboardAnalytics();
+            refreshDashboardWidgets();
         });
     }
 
@@ -676,6 +932,380 @@ function showToast(message) {
             toast.remove();
         }, 300);
     }, 3000);
+}
+
+function getStoredNotifications() {
+    return getStoredJSON(NOTIFICATIONS_STORAGE_KEY, []);
+}
+
+function saveStoredNotifications(items) {
+    const normalized = Array.isArray(items) ? items.slice(0, 120) : [];
+    localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(normalized));
+}
+
+function getReminderState() {
+    return getStoredJSON(REMINDER_STATE_STORAGE_KEY, {});
+}
+
+function saveReminderState(state) {
+    localStorage.setItem(REMINDER_STATE_STORAGE_KEY, JSON.stringify(state || {}));
+}
+
+function shouldSendReminder(reminderKey, cooldownMinutes) {
+    if (!reminderKey) return true;
+
+    const state = getReminderState();
+    const now = Date.now();
+    const cooldownMs = Math.max(1, Number(cooldownMinutes) || 1) * 60 * 1000;
+    const lastSent = Number(state[reminderKey] || 0);
+
+    if (lastSent && now - lastSent < cooldownMs) {
+        return false;
+    }
+
+    state[reminderKey] = now;
+    saveReminderState(state);
+    return true;
+}
+
+function sendBrowserNotification(title, message) {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+
+    if (Notification.permission === 'granted') {
+        try {
+            new Notification(title, { body: message });
+        } catch (error) {
+            console.warn('Browser notification failed:', error);
+        }
+    }
+}
+
+function updateNotificationPermissionHint() {
+    const permissionHint = document.getElementById('notificationPermissionHint');
+    if (!permissionHint) return;
+
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+        permissionHint.innerHTML = '<p>Browser notifications are not supported on this device.</p>';
+        return;
+    }
+
+    if (Notification.permission === 'granted') {
+        permissionHint.innerHTML = '<p>✅ Browser notifications are enabled (outside-site alerts allowed).</p>';
+    } else if (Notification.permission === 'denied') {
+        permissionHint.innerHTML = '<p>❌ Notifications are blocked in browser settings. Enable them to receive reminders outside the website.</p>';
+    } else {
+        permissionHint.innerHTML = '<p>🔕 Click Enable to allow browser reminders outside the website.</p>';
+    }
+}
+
+async function requestBrowserNotificationPermission(force = false) {
+    if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
+
+    const alreadyPrompted = localStorage.getItem(NOTIFICATION_PERMISSION_PROMPTED_KEY) === 'true';
+    if (!force && alreadyPrompted) {
+        updateNotificationPermissionHint();
+        return Notification.permission;
+    }
+
+    if (Notification.permission === 'default') {
+        try {
+            const permission = await Notification.requestPermission();
+            localStorage.setItem(NOTIFICATION_PERMISSION_PROMPTED_KEY, 'true');
+            updateNotificationPermissionHint();
+
+            if (permission === 'granted' && localStorage.getItem(NOTIFICATION_PERMISSION_WELCOME_KEY) !== 'true') {
+                sendBrowserNotification('GrowLog Notifications Enabled', 'You will receive reminders for pending, current, and upcoming tasks.');
+                localStorage.setItem(NOTIFICATION_PERMISSION_WELCOME_KEY, 'true');
+            }
+
+            return permission;
+        } catch (error) {
+            console.warn('Notification permission request failed:', error);
+            updateNotificationPermissionHint();
+            return 'default';
+        }
+    }
+
+    updateNotificationPermissionHint();
+    return Notification.permission;
+}
+
+function addUserNotification({ type = 'info', title, message, reminderKey = '', cooldownMinutes = 180, browser = true }) {
+    if (!title || !message) return;
+    if (!shouldSendReminder(reminderKey, cooldownMinutes)) return;
+
+    const notifications = getStoredNotifications();
+    notifications.unshift({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type,
+        title,
+        message,
+        createdAt: new Date().toISOString(),
+        read: false
+    });
+
+    saveStoredNotifications(notifications);
+    updateNotificationUI();
+    showToast(`🔔 ${title}`);
+
+    if (browser) {
+        sendBrowserNotification(title, message);
+    }
+}
+
+function updateNotificationUI() {
+    const notifications = getStoredNotifications();
+    const unreadCount = notifications.filter(item => !item.read).length;
+    const badge = document.querySelector('.notification-badge');
+
+    if (badge) {
+        if (unreadCount > 0) {
+            badge.textContent = unreadCount > 99 ? '99+' : String(unreadCount);
+            badge.style.display = 'flex';
+        } else {
+            badge.textContent = '0';
+            badge.style.display = 'none';
+        }
+    }
+
+    const list = document.getElementById('notificationList');
+    if (!list) return;
+
+    if (notifications.length === 0) {
+        list.innerHTML = '<p class="notification-empty">No notifications yet ✨</p>';
+        return;
+    }
+
+    list.innerHTML = notifications.slice(0, 25).map(item => {
+        const timeText = new Date(item.createdAt).toLocaleString();
+        return `
+            <div class="notification-item ${item.read ? '' : 'is-unread'}">
+                <div class="notification-item-head">
+                    <strong>${item.title}</strong>
+                    <span>${timeText}</span>
+                </div>
+                <p>${item.message}</p>
+            </div>
+        `;
+    }).join('');
+}
+
+function markNotificationsAsRead() {
+    const notifications = getStoredNotifications();
+    if (notifications.length === 0) return;
+
+    const updated = notifications.map(item => ({ ...item, read: true }));
+    saveStoredNotifications(updated);
+    updateNotificationUI();
+}
+
+function setupNotificationPanel() {
+    const button = document.querySelector('.notification-btn');
+    if (!button) return;
+
+    if (!button.querySelector('.notification-badge')) {
+        const badge = document.createElement('span');
+        badge.className = 'notification-badge';
+        badge.textContent = '0';
+        badge.style.display = 'none';
+        button.appendChild(badge);
+    }
+
+    const existingPanel = document.getElementById('notificationPanel');
+    if (!existingPanel) {
+        const panel = document.createElement('div');
+        panel.id = 'notificationPanel';
+        panel.className = 'notification-panel';
+        panel.innerHTML = `
+            <div class="notification-panel-header">
+                <h4>Notifications</h4>
+                <div class="notification-actions-inline">
+                    <button type="button" id="enableBrowserNotifications" class="notif-action-btn">Enable</button>
+                    <button type="button" id="markAllNotificationsRead" class="notif-action-btn">Mark all read</button>
+                </div>
+            </div>
+            <div class="notification-browser-permission" id="notificationPermissionHint"></div>
+            <div class="notification-panel-list" id="notificationList"></div>
+        `;
+        document.body.appendChild(panel);
+    }
+
+    const panel = document.getElementById('notificationPanel');
+    const markReadBtn = document.getElementById('markAllNotificationsRead');
+    const enablePermissionBtn = document.getElementById('enableBrowserNotifications');
+
+    const positionNotificationPanel = () => {
+        if (!panel || !button) return;
+
+        const rect = button.getBoundingClientRect();
+        const panelWidth = 360;
+        const viewportPadding = 12;
+
+        let left = rect.right - panelWidth;
+        left = Math.max(viewportPadding, left);
+        left = Math.min(left, window.innerWidth - panelWidth - viewportPadding);
+
+        panel.style.top = `${Math.round(rect.bottom + 10)}px`;
+        panel.style.left = `${Math.round(left)}px`;
+    };
+
+    if (markReadBtn && !markReadBtn.dataset.bound) {
+        markReadBtn.dataset.bound = '1';
+        markReadBtn.addEventListener('click', function(event) {
+            event.preventDefault();
+            markNotificationsAsRead();
+        });
+    }
+
+    if (enablePermissionBtn && !enablePermissionBtn.dataset.bound) {
+        enablePermissionBtn.dataset.bound = '1';
+        enablePermissionBtn.addEventListener('click', async function(event) {
+            event.preventDefault();
+            await requestBrowserNotificationPermission(true);
+            updateNotificationPermissionHint();
+            showToast('🔔 Notification permission updated');
+        });
+    }
+
+    if (!button.dataset.bound) {
+        button.dataset.bound = '1';
+        button.addEventListener('click', async function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!panel) return;
+
+            positionNotificationPanel();
+
+            panel.classList.toggle('open');
+            if (panel.classList.contains('open')) {
+                await requestBrowserNotificationPermission(true);
+                updateNotificationPermissionHint();
+                markNotificationsAsRead();
+            }
+        });
+
+        window.addEventListener('resize', function() {
+            if (panel?.classList.contains('open')) {
+                positionNotificationPanel();
+            }
+        });
+
+        window.addEventListener('scroll', function() {
+            if (panel?.classList.contains('open')) {
+                positionNotificationPanel();
+            }
+        }, true);
+    }
+
+    document.addEventListener('click', function(event) {
+        const activePanel = document.getElementById('notificationPanel');
+        if (!activePanel || !activePanel.classList.contains('open')) return;
+        if (activePanel.contains(event.target) || button.contains(event.target)) return;
+        activePanel.classList.remove('open');
+    });
+
+    updateNotificationPermissionHint();
+    updateNotificationUI();
+}
+
+function runTaskReminderChecks() {
+    if (localStorage.getItem('isLoggedIn') !== 'true') return;
+
+    const now = new Date();
+    const todayKey = toDateKey(now);
+    const startOfToday = new Date(`${todayKey}T00:00:00`);
+    const endOfUpcomingWindow = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000));
+
+    const schedules = getSchedules();
+    const pendingTasks = [];
+    const currentTasks = [];
+    const upcomingTasks = [];
+
+    schedules.forEach(task => {
+        if (task.completed) return;
+        const taskDateTime = new Date(`${task.date}T${task.time || '23:59'}`);
+        if (Number.isNaN(taskDateTime.getTime())) return;
+
+        if (taskDateTime <= now) {
+            pendingTasks.push(task);
+        }
+
+        if (task.date === todayKey && taskDateTime >= now && taskDateTime - now <= 2 * 60 * 60 * 1000) {
+            currentTasks.push(task);
+        }
+
+        if (taskDateTime > startOfToday && taskDateTime <= endOfUpcomingWindow) {
+            upcomingTasks.push(task);
+        }
+    });
+
+    if (pendingTasks.length > 0) {
+        const message = `${pendingTasks.length} task(s) are pending. Please complete and tick them.`;
+        addUserNotification({
+            type: 'pending',
+            title: 'Pending Task Reminder',
+            message,
+            reminderKey: `pending-summary-${todayKey}-${pendingTasks.length}`,
+            cooldownMinutes: 120
+        });
+    }
+
+    if (currentTasks.length > 0) {
+        const message = `${currentTasks.length} task(s) are due soon today.`;
+        addUserNotification({
+            type: 'current',
+            title: 'Current Task Reminder',
+            message,
+            reminderKey: `current-summary-${todayKey}-${currentTasks.length}`,
+            cooldownMinutes: 90
+        });
+    }
+
+    if (upcomingTasks.length > 0) {
+        const message = `${upcomingTasks.length} upcoming task(s) are scheduled in the next 3 days.`;
+        addUserNotification({
+            type: 'upcoming',
+            title: 'Upcoming Tasks Reminder',
+            message,
+            reminderKey: `upcoming-summary-${todayKey}-${upcomingTasks.length}`,
+            cooldownMinutes: 12 * 60
+        });
+    }
+
+    const logs = getStoredJSON('learningLogs', []);
+    const todaysLogs = logs.filter(log => toDateKey(log.date) === todayKey);
+    const todaysTaskEntries = expandLogsToTaskEntries(todaysLogs);
+    const tickMap = getStoredJSON('dailyPlanLogCompletion', {});
+    const untickedCount = todaysTaskEntries.filter(task => !tickMap[String(task.key)]).length;
+
+    if (untickedCount > 0) {
+        addUserNotification({
+            type: 'unticked',
+            title: 'Tick Completed Logs',
+            message: `${untickedCount} logged task(s) are not ticked yet in Today's Learning Plan.`,
+            reminderKey: `unticked-summary-${todayKey}-${untickedCount}`,
+            cooldownMinutes: 120
+        });
+    }
+}
+
+function initializeTaskNotifications() {
+    if (localStorage.getItem('isLoggedIn') !== 'true') {
+        updateNotificationUI();
+        return;
+    }
+
+    setupNotificationPanel();
+    requestBrowserNotificationPermission(false).catch(() => {});
+    runTaskReminderChecks();
+
+    if (reminderIntervalId) {
+        clearInterval(reminderIntervalId);
+    }
+
+    reminderIntervalId = setInterval(() => {
+        runTaskReminderChecks();
+    }, 60 * 1000);
 }
 
 // Calculate current streak
@@ -998,6 +1628,325 @@ function saveSchedules(items) {
     localStorage.setItem('learningSchedule', JSON.stringify(items));
 }
 
+function refreshDashboardWidgets() {
+    loadDashboardStats();
+    displayRecentLogs();
+    renderDashboardAnalytics();
+    renderTodayLearningPlan();
+    renderLearningGoals();
+    renderQuickLogCategoryOptions();
+    updateNotificationUI();
+    runTaskReminderChecks();
+}
+
+function syncTodayPlanWithTodayLogs() {
+    const todayKey = toDateKey(new Date());
+    const schedules = getSchedules();
+    const todayIndices = [];
+
+    schedules.forEach((item, index) => {
+        if (item.date === todayKey) {
+            todayIndices.push(index);
+        }
+    });
+
+    if (todayIndices.length === 0) return;
+
+    const logs = getStoredJSON('learningLogs', []);
+    const todaysLogCount = logs.filter(log => toDateKey(log.date) === todayKey).length;
+    if (todaysLogCount <= 0) return;
+
+    const completedAlready = todayIndices.filter(index => schedules[index].completed).length;
+    if (completedAlready >= Math.min(todaysLogCount, todayIndices.length)) return;
+
+    let toMark = Math.min(todaysLogCount, todayIndices.length) - completedAlready;
+    const updated = schedules.map(item => ({ ...item }));
+
+    for (const index of todayIndices) {
+        if (toMark === 0) break;
+        if (!updated[index].completed) {
+            updated[index].completed = true;
+            toMark--;
+        }
+    }
+
+    saveSchedules(updated);
+}
+
+function renderQuickLogCategoryOptions() {
+    const quickCategory = document.getElementById('quickCategory');
+    if (!quickCategory) return;
+
+    const selectedValue = quickCategory.value;
+    const customCategories = getCustomCategories();
+    const logs = getStoredJSON('learningLogs', []);
+    const categoriesFromLogs = [...new Set(logs.map(log => (log.category || '').trim()).filter(Boolean))];
+    const categories = [...new Set([...customCategories, ...categoriesFromLogs])].sort((a, b) => a.localeCompare(b));
+
+    quickCategory.innerHTML = '<option value="">Select Category</option>';
+
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        quickCategory.appendChild(option);
+    });
+
+    if (selectedValue && categories.includes(selectedValue)) {
+        quickCategory.value = selectedValue;
+    }
+}
+
+function expandLogsToTaskEntries(logs) {
+    const splitTaskText = (text) => {
+        return String(text || '')
+            // Split numbered items like "1. ... 2. ..." into separate lines
+            .replace(/\s(?=\d+\.)/g, '\n')
+            .split(/\r?\n+/)
+            .map(line => line.replace(/^\d+\.\s*/, '').trim())
+            .filter(Boolean);
+    };
+
+    return [...logs]
+        .flatMap(log => {
+            const topicParts = splitTaskText(log.topic);
+            const reflectionParts = splitTaskText(log.reflection);
+            const rawParts = [...topicParts, ...reflectionParts];
+            const uniqueParts = [...new Set(rawParts)];
+
+            const titles = uniqueParts.length > 0
+                ? uniqueParts
+                : [(log.category || 'Learning Session').trim()];
+
+            return titles.map((title, index) => ({
+                key: String(`${log.id || `${log.date}-task`}-${index}`),
+                logId: log.id,
+                title,
+                date: log.date,
+                category: log.category || 'Other',
+                duration: parseFloat(log.duration) || 0,
+                createdAt: log.createdAt || log.date
+            }));
+        })
+        .sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date));
+}
+
+function renderTodayLearningPlan() {
+    const planItems = document.getElementById('planItems');
+    const summary = document.getElementById('planSummaryMessage');
+    if (!planItems) return;
+
+    const todayKey = toDateKey(new Date());
+    const schedules = getSchedules();
+    const todayPlans = schedules.filter(item => item.date === todayKey);
+    const logs = getStoredJSON('learningLogs', []);
+    const todaysLogs = logs.filter(log => toDateKey(log.date) === todayKey);
+    const todaysTaskEntries = expandLogsToTaskEntries(todaysLogs);
+    const logCompletionById = getStoredJSON('dailyPlanLogCompletion', {});
+
+    if (todayPlans.length === 0) {
+        if (todaysTaskEntries.length > 0) {
+            planItems.innerHTML = todaysTaskEntries.map(task => {
+                const label = (task.title || task.category || 'Learning Log').trim();
+                const safeLabel = label.length > 42 ? `${label.slice(0, 42)}...` : label;
+                const logKey = String(task.key || `${task.date}-${safeLabel}`);
+                const isCompleted = Boolean(logCompletionById[logKey]);
+                return `
+                    <label class="plan-item">
+                        <input type="checkbox" data-log-plan-key="${logKey}" ${isCompleted ? 'checked' : ''}>
+                        <span>${safeLabel}</span>
+                        ${task.logId ? `<button type="button" class="scheduled-delete" data-log-delete-id="${task.logId}" title="Delete log">✕</button>` : ''}
+                    </label>
+                `;
+            }).join('');
+
+            const getCompletedLogCount = () => {
+                let completed = 0;
+                todaysTaskEntries.forEach(task => {
+                    const label = (task.title || task.category || 'Learning Log').trim();
+                    const safeLabel = label.length > 42 ? `${label.slice(0, 42)}...` : label;
+                    const logKey = String(task.key || `${task.date}-${safeLabel}`);
+                    if (logCompletionById[logKey]) {
+                        completed++;
+                    }
+                });
+                return completed;
+            };
+
+            const updateLogSummary = () => {
+                if (!summary) return;
+                const completedCount = getCompletedLogCount();
+                summary.innerHTML = `Completed <strong>${completedCount}/${todaysTaskEntries.length}</strong> learning tasks today ✨`;
+            };
+
+            updateLogSummary();
+
+            planItems.querySelectorAll('input[data-log-plan-key]').forEach(checkbox => {
+                checkbox.addEventListener('change', async function() {
+                    const key = this.getAttribute('data-log-plan-key');
+                    if (!key) return;
+
+                    const relatedTask = todaysTaskEntries.find(task => String(task.key) === String(key));
+                    const logId = Number(relatedTask?.logId || 0);
+                    const token = getAuthToken();
+                    const currentUser = getStoredJSON('currentUser', null);
+
+                    if (this.checked && logId > 0) {
+                        if (!token || !currentUser?.id) {
+                            this.checked = false;
+                            showToast('⚠️ Please login first');
+                            return;
+                        }
+
+                        const completedAiMap = getCompletedAiLogMap();
+                        const alreadyCompletedInMap = Boolean(completedAiMap[String(logId)]);
+
+                        if (!alreadyCompletedInMap) {
+                            try {
+                                const completionResult = await completeLogWithAi(logId, token);
+                                completedAiMap[String(logId)] = true;
+                                saveCompletedAiLogMap(completedAiMap);
+
+                                const aiResponse = String(completionResult?.ai_response || '').trim();
+                                if (aiResponse) {
+                                    const shortMessage = aiResponse.length > 140 ? `${aiResponse.slice(0, 140)}...` : aiResponse;
+                                    showToast(`🤖 AI Coach: ${shortMessage}`);
+                                } else {
+                                    showToast('✅ Task completed and synced');
+                                }
+                            } catch (error) {
+                                this.checked = false;
+                                showToast(`❌ ${error.message}`);
+                                return;
+                            }
+                        }
+                    }
+
+                    logCompletionById[key] = this.checked;
+                    localStorage.setItem('dailyPlanLogCompletion', JSON.stringify(logCompletionById));
+                    updateLogSummary();
+                    runTaskReminderChecks();
+                    updateNotificationUI();
+                });
+            });
+
+            planItems.querySelectorAll('button[data-log-delete-id]').forEach(button => {
+                button.addEventListener('click', function(event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const logId = Number(this.getAttribute('data-log-delete-id'));
+                    deleteLogEntry(logId);
+                });
+            });
+
+            return;
+        }
+
+        planItems.innerHTML = '<p class="no-schedule">No plan for today. Add tasks in Schedule Planner ✨</p>';
+        if (summary) {
+            summary.innerHTML = "You're all caught up. Add a learning task to get started 🚀";
+        }
+        return;
+    }
+
+    planItems.innerHTML = todayPlans.map(item => `
+        <label class="plan-item">
+            <input type="checkbox" data-plan-id="${item.id}" ${item.completed ? 'checked' : ''}>
+            <span>${item.title}${item.time ? ` • ${item.time}` : ''}</span>
+        </label>
+    `).join('');
+
+    const completedCount = todayPlans.filter(item => item.completed).length;
+    if (summary) {
+        summary.innerHTML = `Completed <strong>${completedCount}/${todayPlans.length}</strong> tasks today ✨`;
+    }
+
+    planItems.querySelectorAll('input[data-plan-id]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const planId = Number(this.getAttribute('data-plan-id'));
+            const updated = schedules.map(item => {
+                if (item.id === planId) {
+                    return { ...item, completed: this.checked };
+                }
+                return item;
+            });
+            saveSchedules(updated);
+            renderTodayLearningPlan();
+            runTaskReminderChecks();
+            updateNotificationUI();
+        });
+    });
+}
+
+function completeOnePlanTaskForCategory(category) {
+    const todayKey = toDateKey(new Date());
+    const schedules = getSchedules();
+    const normalizedCategory = (category || '').toLowerCase();
+
+    const target = schedules.find(item => (
+        item.date === todayKey
+        && !item.completed
+        && (item.category || '').toLowerCase() === normalizedCategory
+    ));
+
+    const fallbackTarget = schedules.find(item => (
+        item.date === todayKey
+        && !item.completed
+    ));
+
+    const chosenTarget = target || fallbackTarget;
+    if (!chosenTarget) return;
+
+    const updated = schedules.map(item => (
+        item.id === chosenTarget.id ? { ...item, completed: true } : item
+    ));
+    saveSchedules(updated);
+}
+
+function renderLearningGoals() {
+    const goalsList = document.getElementById('learningGoalsList');
+    if (!goalsList) return;
+
+    const logs = getStoredJSON('learningLogs', []);
+    const goalLogs = expandLogsToTaskEntries(logs);
+    if (goalLogs.length === 0) {
+        goalsList.innerHTML = '<p class="no-schedule">No goals yet. Add logs to build your goals automatically ✨</p>';
+        return;
+    }
+
+    goalsList.innerHTML = goalLogs.map((log, index) => {
+        const title = (log.title || 'Learning Session').trim();
+        const displayTitle = title.length > 42 ? `${title.slice(0, 42)}...` : title;
+        const minutes = Math.max(1, Math.round((parseFloat(log.duration) || 0) * 60));
+        const progressPercent = 100;
+        const icon = getCategoryIcon(log.category || 'Other');
+        const dateText = new Date(log.date).toLocaleDateString();
+
+        return `
+            <div class="goal-item">
+                <div class="goal-header">
+                    <span class="goal-icon">${icon}</span>
+                    <span class="goal-name">${displayTitle}</span>
+                    ${log.logId ? `<button type="button" class="scheduled-delete" data-goal-delete-id="${log.logId}" title="Delete log">✕</button>` : ''}
+                </div>
+                <div class="goal-progress-bar">
+                    <div class="progress" style="width: ${progressPercent}%;"></div>
+                </div>
+                <span class="goal-count">${minutes}m • ${dateText}</span>
+            </div>
+        `;
+    }).join('');
+
+    goalsList.querySelectorAll('button[data-goal-delete-id]').forEach(button => {
+        button.addEventListener('click', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const logId = Number(this.getAttribute('data-goal-delete-id'));
+            deleteLogEntry(logId);
+        });
+    });
+}
+
 function initializeScheduler() {
     const schedulerGrid = document.getElementById('schedulerGrid');
     const scheduleForm = document.getElementById('scheduleForm');
@@ -1059,6 +2008,9 @@ function initializeScheduler() {
 
         renderSchedulerCalendar();
         renderScheduledList();
+        renderTodayLearningPlan();
+        runTaskReminderChecks();
+        updateNotificationUI();
         showToast('📅 Task scheduled!');
     });
 }
@@ -1169,6 +2121,9 @@ function deleteSchedule(id) {
     saveSchedules(remaining);
     renderSchedulerCalendar();
     renderScheduledList();
+    renderTodayLearningPlan();
+    runTaskReminderChecks();
+    updateNotificationUI();
     showToast('🗑️ Scheduled task removed');
 }
 
@@ -1242,7 +2197,7 @@ function displayRecentLogs() {
                 <span class="log-category">${log.category}</span>
                 <span class="log-date">${new Date(log.date).toLocaleDateString()}</span>
             </div>
-            <div class="log-topic">${log.topic}</div>
+            ${log.topic ? `<div class="log-topic">${log.topic}</div>` : ''}
             <div class="log-duration">⏱️ ${log.duration} hours</div>
             ${log.reflection ? `<div style="color: var(--text-light); margin-top: 0.5rem; font-size: 0.9rem;">💭 ${log.reflection.substring(0, 100)}...</div>` : ''}
         </div>
@@ -1289,12 +2244,24 @@ function displayFilteredLogs(category) {
                 <span class="log-category">${getCategoryIcon(log.category)} ${log.category}</span>
                 <span class="log-date">${new Date(log.date).toLocaleDateString()}</span>
             </div>
-            <div class="log-topic">${log.topic}</div>
+            ${log.topic ? `<div class="log-topic">${log.topic}</div>` : ''}
             <div class="log-duration">⏱️ ${log.duration} hour${log.duration !== 1 ? 's' : ''}</div>
-            ${log.reflection ? `<div style="color: var(--text-light); margin-top: 0.8rem; font-size: 0.9rem;">💭 <strong>Reflection:</strong> ${log.reflection}</div>` : ''}
+            ${log.reflection ? `<div style="color: var(--text-light); margin-top: 0.8rem; font-size: 0.9rem;">💭 <strong>Notes:</strong> ${log.reflection}</div>` : ''}
             ${log.proof ? `<div style="color: var(--primary-color); margin-top: 0.5rem; font-size: 0.85rem;"><a href="${log.proof}" target="_blank" style="text-decoration: none; font-weight: 600;">🔗 View Proof</a></div>` : ''}
+            <div style="margin-top: 0.75rem; display: flex; justify-content: flex-end;">
+                <button type="button" class="scheduled-delete" data-history-delete-id="${log.id}" title="Delete log">✕</button>
+            </div>
         </div>
     `).join('');
+
+    logsContainer.querySelectorAll('button[data-history-delete-id]').forEach(button => {
+        button.addEventListener('click', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            const logId = Number(this.getAttribute('data-history-delete-id'));
+            deleteLogEntry(logId);
+        });
+    });
 }
 
 function getCategoryIcon(category) {
