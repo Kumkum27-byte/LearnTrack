@@ -11,7 +11,8 @@ class AIConversation(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     role = Column(String)
     content = Column(Text)
-    status = Column(String, default="pending")
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    #relationship
     daily_log = relationship("DailyLog", back_populates="conversations")
+    user = relationship("User")
