@@ -2,6 +2,24 @@
 // ==================== LEARNTRACK APPLICATION ====================
 // Complete JavaScript for LearnTrack - Learning Management System
 
+const API_BASE = 'http://localhost:8000';
+
+function getAuthHeaders() {
+    const token = localStorage.getItem('token');
+    return token ? { 'Authorization': 'Bearer ' + token } : {};
+}
+
+function getUserIdFromToken() {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        return payload.sub;
+    } catch (e) {
+        return null;
+    }
+}
+
 function getStoredJSON(key, fallback) {
     try {
         const rawValue = localStorage.getItem(key);
@@ -17,6 +35,12 @@ function getStoredJSON(key, fallback) {
 let weeklyTrendChartInstance = null;
 let categorySplitChartInstance = null;
 let schedulerMonthDate = new Date();
+
+function appendLocalLog(logEntry) {
+    const logs = getStoredJSON('learningLogs', []);
+    logs.push(logEntry);
+    localStorage.setItem('learningLogs', JSON.stringify(logs));
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ LearnTrack - DOM Loaded - Script Initialized');
@@ -62,27 +86,30 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Check if user already exists
-            let users = getStoredJSON('learntrackUsers', []);
-            if (users.find(u => u.email === email)) {
-                showToast('❌ Email already registered. Please login or use another email.');
-                return;
-            }
-
+            // Check if user already exists - but API will handle
             // Save new user
-            users.push({
-                id: Date.now(),
-                name: name,
-                email: email,
-                password: password,
-                createdAt: new Date().toLocaleString()
-            });
-            localStorage.setItem('learntrackUsers', JSON.stringify(users));
-
-            showToast('✅ Account created! Redirecting to login...');
-            setTimeout(() => {
-                window.location.href = 'login.html';
-            }, 1500);
+            fetch(API_BASE + '/users/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    email: email,
+                    password: password
+                })
+            }).then(res => res.json().then(data => ({ res, data })))
+              .then(({ res, data }) => {
+                  if (res.ok) {
+                      showToast('✅ Account created! Redirecting to login...');
+                      setTimeout(() => {
+                          window.location.href = 'login.html';
+                      }, 1500);
+                  } else {
+                      showToast('❌ ' + (data.detail || 'Error creating account'));
+                  }
+              }).catch(err => {
+                  console.error('Signup error:', err);
+                  showToast('❌ Network error');
+              });
         });
     }
 
@@ -102,22 +129,31 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // Check user credentials
-            let users = getStoredJSON('learntrackUsers', []);
-            const user = users.find(u => u.email === email && u.password === password);
-
-            if (user) {
-                // Successful login
-                localStorage.setItem('currentUser', JSON.stringify(user));
-                localStorage.setItem('isLoggedIn', 'true');
-                localStorage.setItem('userEmail', email);
-                showToast('✅ Login successful! Redirecting...');
-                
-                setTimeout(() => {
-                    window.location.href = 'dashboard.html';
-                }, 1500);
-            } else {
-                showToast('❌ Invalid email or password');
-            }
+            fetch(API_BASE + '/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    username: email,
+                    password: password
+                })
+            }).then(res => res.json().then(data => ({ res, data })))
+              .then(({ res, data }) => {
+                  if (res.ok) {
+                      localStorage.setItem('token', data.access_token);
+                      const userId = getUserIdFromToken();
+                      localStorage.setItem('userId', userId);
+                      showToast('✅ Login successful! Redirecting...');
+                      
+                      setTimeout(() => {
+                          window.location.href = 'dashboard.html';
+                      }, 1500);
+                  } else {
+                      showToast('❌ Invalid email or password');
+                  }
+              }).catch(err => {
+                  console.error('Login error:', err);
+                  showToast('❌ Network error');
+              });
         });
     }
 
@@ -164,7 +200,6 @@ document.addEventListener('DOMContentLoaded', function() {
             const topic = document.getElementById('topic')?.value?.trim();
             const duration = document.getElementById('duration')?.value;
             const reflection = document.getElementById('reflection')?.value?.trim();
-            const proof = document.getElementById('learningDate')?.value?.trim();
 
             // Validation
             if (!category || !topic || !duration) {
@@ -172,49 +207,98 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            if (parseFloat(duration) <= 0) {
+            const durationHours = parseFloat(duration);
+            if (durationHours <= 0) {
                 showToast('❌ Duration must be greater than 0');
                 return;
             }
 
-            // Create learning log entry
-            const logEntry = {
-                id: Date.now(),
-                category: category,
-                topic: topic,
-                duration: parseFloat(duration),
-                reflection: reflection,
-                proof: proof,
-                date: new Date().toISOString().split('T')[0],
-                createdAt: new Date().toISOString()
-            };
-
-            // Save to localStorage
-            let logs = getStoredJSON('learningLogs', []);
-            logs.push(logEntry);
-            localStorage.setItem('learningLogs', JSON.stringify(logs));
-
-            // Show success toast
-            showToast('✨ Learning logged successfully!');
-            
-            // Show celebration notification
-            const celebrationToast = document.getElementById('celebrationToast');
-            if (celebrationToast) {
-                celebrationToast.style.display = 'flex';
-                setTimeout(() => {
-                    celebrationToast.style.display = 'none';
-                }, 3000);
+            const userId = localStorage.getItem('userId');
+            if (!userId) {
+                showToast('❌ Not logged in');
+                return;
             }
 
-            // Update goal progress
-            updateWeeklyGoal();
-            updateDashboardStats();
-            updateStreakDisplay();
-            
-            setTimeout(() => {
-                logForm.reset();
-                updateFormProgress();
-            }, 500);
+            // Find or create track
+            fetch(API_BASE + `/users/${userId}/tracks`, {
+                headers: getAuthHeaders()
+            }).then(res => res.json()).then(tracks => {
+                let track = tracks.find(t => t.title === category);
+                if (!track) {
+                    // Create track
+                    return fetch(API_BASE + `/users/${userId}/tracks`, {
+                        method: 'POST',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            title: category,
+                            start_date: new Date().toISOString().split('T')[0],
+                            end_date: new Date(new Date().getTime() + 30*24*60*60*1000).toISOString().split('T')[0]
+                        })
+                    }).then(res => res.json().then(data => ({ res, data }))).then(({ res, data }) => {
+                        if (!res.ok) {
+                            throw new Error('Failed to create track: ' + (data.detail || data.message || 'Unknown error'));
+                        }
+                        return data;
+                    });
+                } else {
+                    return track;
+                }
+            }).then(track => {
+                // Create log
+                const notes = topic + (reflection ? ' - ' + reflection : '');
+                const minutesSpent = Math.round(durationHours * 60);
+                const logDate = new Date().toISOString().split('T')[0];
+
+                return fetch(API_BASE + `/logs/${track.id}`, {
+                    method: 'POST',
+                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        date: logDate,
+                        minutes_spent: minutesSpent,
+                        notes: notes
+                    })
+                });
+            }).then(res => res.json().then(data => ({ res, data })))
+              .then(({ res, data }) => {
+                  if (res.ok) {
+                      const logEntry = {
+                          date: logDate,
+                          category: category,
+                          topic: topic,
+                          duration: durationHours,
+                          reflection: reflection,
+                          proof: '',
+                          createdAt: new Date().toISOString()
+                      };
+                      appendLocalLog(logEntry);
+
+                      showToast('✨ Learning logged successfully!');
+                      
+                      // Show celebration notification
+                      const celebrationToast = document.getElementById('celebrationToast');
+                      if (celebrationToast) {
+                          celebrationToast.style.display = 'flex';
+                          setTimeout(() => {
+                              celebrationToast.style.display = 'none';
+                          }, 3000);
+                      }
+
+                      // Update goal progress
+                      updateWeeklyGoal();
+                      updateDashboardStats();
+                      updateStreakDisplay();
+                      
+                      setTimeout(() => {
+                          logForm.reset();
+                          updateFormProgress();
+                      }, 500);
+                  } else {
+                      showToast('❌ Error logging: ' + (data.detail || 'Unknown error'));
+                  }
+              }).catch(err => {
+                  console.error('Log submit error:', err);
+                  showToast('❌ Error: ' + err.message);
+              });
         });
 
         // Load initial stats and custom categories
@@ -264,13 +348,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function updateWeeklyGoal() {
+    function updateWeeklyGoal(logs = []) {
         const goalProgress = document.getElementById('goalProgress');
         const goalFill = document.getElementById('goalFill');
         
         if (goalProgress && goalFill) {
-            let logs = getStoredJSON('learningLogs', []);
-            
             // Count logs from this week
             const today = new Date();
             const weekStart = new Date(today.setDate(today.getDate() - today.getDay()));
@@ -282,8 +364,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    function updateDashboardStats() {
-        const logs = getStoredJSON('learningLogs', []);
+    function updateDashboardStats(logs = []) {
         
         // Update total hours
         const totalHours = document.getElementById('totalHours');
@@ -336,10 +417,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ==================== DASHBOARD PAGE ====================
     // Check login status - only for dashboard pages
-    const isLoggedIn = localStorage.getItem('isLoggedIn');
-    const currentUser = getStoredJSON('currentUser', null);
+    const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
 
-    if (!isLoggedIn || !currentUser) {
+    if (!token || !userId) {
         // Only redirect if on dashboard pages
         const currentPage = window.location.pathname.split('/').pop().toLowerCase();
         const protectedPages = ['dashboard.html', 'log.html', 'history.html', 'settings.html'];
@@ -354,9 +435,15 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Display user name on dashboard
-    const userNameElement = document.querySelector('.user-name');
-    if (userNameElement && currentUser) {
-        userNameElement.textContent = currentUser.name;
+    if (userId) {
+        fetch(API_BASE + `/users/${userId}`, {
+            headers: getAuthHeaders()
+        }).then(res => res.json()).then(user => {
+            const userNameElement = document.querySelector('.user-name');
+            if (userNameElement) {
+                userNameElement.textContent = user.name;
+            }
+        }).catch(err => console.error('Error fetching user:', err));
     }
 
     // Load and display dashboard data
@@ -378,26 +465,79 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // Create a new log
-            const newLog = {
-                date: new Date().toISOString(),
-                category: category,
-                topic: 'Quick Log',
-                duration: 1, // Default 1 hour for quick logs
-                reflection: reflection
-            };
+            const userId = localStorage.getItem('userId');
+            if (!userId) {
+                showToast('❌ Not logged in');
+                return;
+            }
 
-            // Save to localStorage
-            const logs = getStoredJSON('learningLogs', []);
-            logs.push(newLog);
-            localStorage.setItem('learningLogs', JSON.stringify(logs));
+            // Find or create track
+            fetch(API_BASE + `/users/${userId}/tracks`, {
+                headers: getAuthHeaders()
+            }).then(res => res.json()).then(tracks => {
+                let track = tracks.find(t => t.title === category);
+                if (!track) {
+                    // Create track
+                    return fetch(API_BASE + `/users/${userId}/tracks`, {
+                        method: 'POST',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            title: category,
+                            start_date: new Date().toISOString().split('T')[0],
+                            end_date: new Date(new Date().getTime() + 30*24*60*60*1000).toISOString().split('T')[0]
+                        })
+                    }).then(res => res.json().then(data => ({ res, data }))).then(({ res, data }) => {
+                        if (!res.ok) {
+                            throw new Error('Failed to create track: ' + (data.detail || data.message || 'Unknown error'));
+                        }
+                        return data;
+                    });
+                } else {
+                    return track;
+                }
+            }).then(track => {
+                // Create log
+                const notes = 'Quick Log - ' + reflection;
+                const minutesSpent = 60; // Default 1 hour
+                const logDate = new Date().toISOString().split('T')[0];
 
-            // Reset form and reload
-            quickLogForm.reset();
-            showToast('✅ Learning logged successfully!');
-            loadDashboardStats();
-            displayRecentLogs();
-            renderDashboardAnalytics();
+                return fetch(API_BASE + `/logs/${track.id}`, {
+                    method: 'POST',
+                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        date: logDate,
+                        minutes_spent: minutesSpent,
+                        notes: notes
+                    })
+                });
+            }).then(res => res.json().then(data => ({ res, data })))
+              .then(({ res, data }) => {
+                  if (res.ok) {
+                      const localQuickLog = {
+                          date: logDate,
+                          category: category,
+                          topic: 'Quick Log',
+                          duration: 1,
+                          reflection: reflection,
+                          proof: '',
+                          createdAt: new Date().toISOString()
+                      };
+                      appendLocalLog(localQuickLog);
+
+                      showToast('✅ Learning logged successfully!');
+                      
+                      // Reset form and reload
+                      quickLogForm.reset();
+                      loadDashboardStats();
+                      displayRecentLogs();
+                      renderDashboardAnalytics();
+                  } else {
+                      showToast('❌ Error logging: ' + (data.detail || 'Unknown error'));
+                  }
+              }).catch(err => {
+                  console.error('Quick log error:', err);
+                  showToast('❌ Error: ' + err.message);
+              });
         });
     }
 
@@ -406,6 +546,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', function() {
             if (confirm('Are you sure you want to logout?')) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('userId');
                 localStorage.removeItem('isLoggedIn');
                 localStorage.removeItem('currentUser');
                 localStorage.removeItem('userEmail');
@@ -425,6 +567,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         // Display all logs on first load
         displayFilteredLogs('All');
+        // Display today's learning plan
+        displayTodaysPlan();
     }
 
     // Sidebar navigation
@@ -442,9 +586,8 @@ document.addEventListener('DOMContentLoaded', function() {
 // Logout function (called from HTML onclick handlers)
 function logout() {
     if (confirm('Are you sure you want to logout?')) {
-        localStorage.removeItem('isLoggedIn');
-        localStorage.removeItem('currentUser');
-        localStorage.removeItem('userEmail');
+        localStorage.removeItem('token');
+        localStorage.removeItem('userId');
         showToast('✅ Logged out successfully!');
         setTimeout(() => {
             window.location.href = 'login.html';
@@ -467,8 +610,7 @@ function showToast(message) {
 }
 
 // Calculate current streak
-function calculateCurrentStreak() {
-    const logs = getStoredJSON('learningLogs', []);
+function calculateCurrentStreak(logs = []) {
     if (logs.length === 0) return 0;
 
     // Sort logs by date
@@ -497,8 +639,7 @@ function calculateCurrentStreak() {
 }
 
 // Calculate longest streak
-function calculateLongestStreak() {
-    const logs = getStoredJSON('learningLogs', []);
+function calculateLongestStreak(logs = []) {
     if (logs.length === 0) return 0;
 
     // Get unique dates sorted
@@ -524,15 +665,13 @@ function calculateLongestStreak() {
 }
 
 // Count total days learned
-function countTotalDaysLearned() {
-    const logs = getStoredJSON('learningLogs', []);
+function countTotalDaysLearned(logs = []) {
     const uniqueDates = new Set(logs.map(log => log.date));
     return uniqueDates.size;
 }
 
 // Calculate total hours
-function calculateTotalHours() {
-    const logs = getStoredJSON('learningLogs', []);
+function calculateTotalHours(logs = []) {
     return logs.reduce((total, log) => total + (parseFloat(log.duration) || 0), 0).toFixed(1);
 }
 
@@ -558,86 +697,118 @@ function setDashboardDate() {
 }
 
 // Count logs by category
-function countByCategory(category) {
-    const logs = getStoredJSON('learningLogs', []);
+function countByCategory(category, logs = []) {
     return logs.filter(log => log.category === category).length;
 }
 
 // Load and display dashboard statistics
 function loadDashboardStats() {
-    const logs = getStoredJSON('learningLogs', []);
-    const totalHoursNumber = logs.reduce((sum, log) => sum + (parseFloat(log.duration) || 0), 0);
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
 
-    // Update streak stats
-    const streakValue = document.getElementById('currentStreak');
-    const currentStreak = calculateCurrentStreak();
-    if (streakValue) {
-        streakValue.textContent = currentStreak;
-    }
+    fetch(API_BASE + `/users/${userId}/tracks`, {
+        headers: getAuthHeaders()
+    }).then(res => res.json()).then(tracks => {
+        // Fetch logs for all tracks
+        const logPromises = tracks.map(track => 
+            fetch(API_BASE + `/logs/${track.id}`, { headers: getAuthHeaders() }).then(res => res.json())
+        );
 
-    const longestStreakEl = document.getElementById('longestStreak');
-    if (longestStreakEl) {
-        longestStreakEl.textContent = calculateLongestStreak();
-    }
+        Promise.all(logPromises).then(logsArrays => {
+            const allLogs = [];
+            logsArrays.forEach(logs => allLogs.push(...logs));
 
-    const activeDaysEl = document.getElementById('activeDays');
-    if (activeDaysEl) {
-        activeDaysEl.textContent = countTotalDaysLearned();
-    }
+            // Convert minutes to hours for compatibility
+            allLogs.forEach(log => {
+                log.duration = log.minutes_spent / 60;
+                log.category = tracks.find(t => t.id === log.track_id)?.title || 'Other';
+                log.topic = log.notes || '';
+                log.reflection = '';
+                log.date = log.date;
+            });
 
-    const totalHoursEl = document.getElementById('totalHours');
-    if (totalHoursEl) {
-        totalHoursEl.textContent = formatHours(totalHoursNumber);
-    }
+            const totalHoursNumber = allLogs.reduce((sum, log) => sum + log.duration, 0);
 
-    const streakDisplayEl = document.getElementById('streakDisplay');
-    if (streakDisplayEl) {
-        streakDisplayEl.textContent = `${currentStreak} Days`;
-    }
+            // Update streak stats - use the max from tracks
+            const maxCurrentStreak = Math.max(...tracks.map(t => t.current_streak || 0));
+            const maxLongestStreak = Math.max(...tracks.map(t => t.longest_streak || 0));
 
-    const totalHoursDisplayEl = document.getElementById('totalHoursDisplay');
-    if (totalHoursDisplayEl) {
-        totalHoursDisplayEl.textContent = formatHours(totalHoursNumber);
-    }
+            const streakValue = document.getElementById('currentStreak');
+            if (streakValue) {
+                streakValue.textContent = maxCurrentStreak;
+            }
 
-    const completionRateDisplayEl = document.getElementById('completionRateDisplay');
-    if (completionRateDisplayEl) {
-        const completion = Math.min(Math.round((countTotalDaysLearned() / 30) * 100), 100);
-        completionRateDisplayEl.textContent = `${completion}%`;
-    }
+            const longestStreakEl = document.getElementById('longestStreak');
+            if (longestStreakEl) {
+                longestStreakEl.textContent = maxLongestStreak;
+            }
 
-    const totalLearningDaysEl = document.getElementById('totalLearningDays');
-    if (totalLearningDaysEl) {
-        totalLearningDaysEl.textContent = countTotalDaysLearned();
-    }
+            const activeDaysEl = document.getElementById('activeDays');
+            if (activeDaysEl) {
+                const uniqueDates = new Set(allLogs.map(log => log.date));
+                activeDaysEl.textContent = uniqueDates.size;
+            }
 
-    // Update welcome text with username
-    const welcomeText = document.getElementById('welcomeText');
-    const currentUser = getStoredJSON('currentUser', null);
-    if (welcomeText && currentUser) {
-        welcomeText.textContent = `Welcome back, ${currentUser.name}!`;
-    }
+            const totalHoursEl = document.getElementById('totalHours');
+            if (totalHoursEl) {
+                totalHoursEl.textContent = formatHours(totalHoursNumber);
+            }
 
-    // Generate dynamic current/previous month heatmaps
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
-    const previousDate = new Date(currentYear, now.getMonth() - 1, 1);
-    const previousMonth = previousDate.getMonth() + 1;
-    const previousYear = previousDate.getFullYear();
+            const streakDisplayEl = document.getElementById('streakDisplay');
+            if (streakDisplayEl) {
+                streakDisplayEl.textContent = `${maxCurrentStreak} Days`;
+            }
 
-    const currentMonthLabel = document.getElementById('currentMonthLabel');
-    if (currentMonthLabel) {
-        currentMonthLabel.textContent = now.toLocaleDateString(undefined, { month: 'long' });
-    }
+            const totalHoursDisplayEl = document.getElementById('totalHoursDisplay');
+            if (totalHoursDisplayEl) {
+                totalHoursDisplayEl.textContent = formatHours(totalHoursNumber);
+            }
 
-    const previousMonthLabel = document.getElementById('previousMonthLabel');
-    if (previousMonthLabel) {
-        previousMonthLabel.textContent = previousDate.toLocaleDateString(undefined, { month: 'long' });
-    }
+            const completionRateDisplayEl = document.getElementById('completionRateDisplay');
+            if (completionRateDisplayEl) {
+                const uniqueDates = new Set(allLogs.map(log => log.date));
+                const completion = Math.min(Math.round((uniqueDates.size / 30) * 100), 100);
+                completionRateDisplayEl.textContent = `${completion}%`;
+            }
 
-    generateHeatmap('currentHeatmap', currentMonth, currentYear);
-    generateHeatmap('previousHeatmap', previousMonth, previousYear);
+            const totalLearningDaysEl = document.getElementById('totalLearningDays');
+            if (totalLearningDaysEl) {
+                const uniqueDates = new Set(allLogs.map(log => log.date));
+                totalLearningDaysEl.textContent = uniqueDates.size;
+            }
+
+            // Update welcome text with username
+            fetch(API_BASE + `/users/${userId}`, {
+                headers: getAuthHeaders()
+            }).then(res => res.json()).then(user => {
+                const welcomeText = document.getElementById('welcomeText');
+                if (welcomeText) {
+                    welcomeText.textContent = `Welcome back, ${user.name}!`;
+                }
+            }).catch(err => console.error('Error fetching user:', err));
+
+            // Generate dynamic current/previous month heatmaps
+            const now = new Date();
+            const currentMonth = now.getMonth() + 1;
+            const currentYear = now.getFullYear();
+            const previousDate = new Date(currentYear, now.getMonth() - 1, 1);
+            const previousMonth = previousDate.getMonth() + 1;
+            const previousYear = previousDate.getFullYear();
+
+            const currentMonthLabel = document.getElementById('currentMonthLabel');
+            if (currentMonthLabel) {
+                currentMonthLabel.textContent = now.toLocaleDateString(undefined, { month: 'long' });
+            }
+
+            const previousMonthLabel = document.getElementById('previousMonthLabel');
+            if (previousMonthLabel) {
+                previousMonthLabel.textContent = previousDate.toLocaleDateString(undefined, { month: 'long' });
+            }
+
+            generateHeatmap('currentHeatmap', currentMonth, currentYear, allLogs);
+            generateHeatmap('previousHeatmap', previousMonth, previousYear, allLogs);
+        }).catch(err => console.error('Error fetching logs:', err));
+    }).catch(err => console.error('Error fetching tracks:', err));
 }
 
 function toDateKey(dateInput) {
@@ -675,107 +846,127 @@ function renderDashboardAnalytics() {
         return;
     }
 
-    const logs = getStoredJSON('learningLogs', []);
-    const { labels, keys } = getLastNDaysLabels(7);
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
 
-    const byDay = {};
-    const byCategory = {};
+    fetch(API_BASE + `/users/${userId}/tracks`, {
+        headers: getAuthHeaders()
+    }).then(res => res.json()).then(tracks => {
+        const logPromises = tracks.map(track => 
+            fetch(API_BASE + `/logs/${track.id}`, { headers: getAuthHeaders() }).then(res => res.json())
+        );
 
-    logs.forEach(log => {
-        const dayKey = toDateKey(log.date);
-        const duration = parseFloat(log.duration) || 0;
+        Promise.all(logPromises).then(logsArrays => {
+            const logs = [];
+            logsArrays.forEach(logsArr => logs.push(...logsArr));
 
-        if (dayKey) {
-            byDay[dayKey] = (byDay[dayKey] || 0) + duration;
-        }
+            logs.forEach(log => {
+                log.duration = log.minutes_spent / 60;
+                log.category = tracks.find(t => t.id === log.track_id)?.title || 'Other';
+            });
 
-        const category = log.category || 'Other';
-        byCategory[category] = (byCategory[category] || 0) + duration;
-    });
+            const { labels, keys } = getLastNDaysLabels(7);
 
-    const trendData = keys.map(key => Number((byDay[key] || 0).toFixed(2)));
-    const categoryLabels = Object.keys(byCategory);
-    const categoryData = Object.values(byCategory).map(value => Number(value.toFixed(2)));
+            const byDay = {};
+            const byCategory = {};
 
-    const hasCategoryData = categoryData.length > 0;
-    const splitLabels = hasCategoryData ? categoryLabels : ['No Data'];
-    const splitData = hasCategoryData ? categoryData : [1];
+            logs.forEach(log => {
+                const dayKey = toDateKey(log.date);
+                const duration = parseFloat(log.duration) || 0;
 
-    if (weeklyTrendChartInstance) {
-        weeklyTrendChartInstance.destroy();
-    }
-
-    if (categorySplitChartInstance) {
-        categorySplitChartInstance.destroy();
-    }
-
-    const computedStyle = getComputedStyle(document.documentElement);
-    const textColor = computedStyle.getPropertyValue('--text-main').trim() || '#1e293b';
-    const lightTextColor = computedStyle.getPropertyValue('--text-light').trim() || '#64748b';
-    const primaryColor = computedStyle.getPropertyValue('--primary-color').trim() || '#3b82f6';
-
-    weeklyTrendChartInstance = new Chart(weeklyCanvas, {
-        type: 'bar',
-        data: {
-            labels,
-            datasets: [{
-                label: 'Hours Learned',
-                data: trendData,
-                backgroundColor: 'rgba(59,130,246,0.7)',
-                borderColor: primaryColor,
-                borderWidth: 1,
-                borderRadius: 8
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    labels: { color: textColor }
+                if (dayKey) {
+                    byDay[dayKey] = (byDay[dayKey] || 0) + duration;
                 }
-            },
-            scales: {
-                x: {
-                    ticks: { color: lightTextColor },
-                    grid: { display: false }
-                },
-                y: {
-                    beginAtZero: true,
-                    ticks: { color: lightTextColor },
-                    grid: { color: 'rgba(148,163,184,0.2)' }
-                }
+
+                const category = log.category || 'Other';
+                byCategory[category] = (byCategory[category] || 0) + duration;
+            });
+
+            const trendData = keys.map(key => Number((byDay[key] || 0).toFixed(2)));
+            const categoryLabels = Object.keys(byCategory);
+            const categoryData = Object.values(byCategory).map(value => Number(value.toFixed(2)));
+
+            const hasCategoryData = categoryData.length > 0;
+            const splitLabels = hasCategoryData ? categoryLabels : ['No Data'];
+            const splitData = hasCategoryData ? categoryData : [1];
+
+            if (weeklyTrendChartInstance) {
+                weeklyTrendChartInstance.destroy();
             }
-        }
-    });
 
-    categorySplitChartInstance = new Chart(categoryCanvas, {
-        type: 'doughnut',
-        data: {
-            labels: splitLabels,
-            datasets: [{
-                data: splitData,
-                backgroundColor: hasCategoryData
-                    ? ['#3b82f6', '#06b6d4', '#6366f1', '#14b8a6', '#8b5cf6', '#0ea5e9']
-                    : ['#cbd5e1'],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: {
-                        color: textColor,
-                        boxWidth: 12,
-                        padding: 12
+            if (categorySplitChartInstance) {
+                categorySplitChartInstance.destroy();
+            }
+
+            const computedStyle = getComputedStyle(document.documentElement);
+            const textColor = computedStyle.getPropertyValue('--text-main').trim() || '#1e293b';
+            const lightTextColor = computedStyle.getPropertyValue('--text-light').trim() || '#64748b';
+            const primaryColor = computedStyle.getPropertyValue('--primary-color').trim() || '#3b82f6';
+
+            weeklyTrendChartInstance = new Chart(weeklyCanvas, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Hours Learned',
+                        data: trendData,
+                        backgroundColor: 'rgba(59,130,246,0.7)',
+                        borderColor: primaryColor,
+                        borderWidth: 1,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: textColor }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: lightTextColor },
+                            grid: { display: false }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: { color: lightTextColor },
+                            grid: { color: 'rgba(148,163,184,0.2)' }
+                        }
                     }
                 }
-            }
-        }
-    });
+            });
+
+            categorySplitChartInstance = new Chart(categoryCanvas, {
+                type: 'doughnut',
+                data: {
+                    labels: splitLabels,
+                    datasets: [{
+                        data: splitData,
+                        backgroundColor: hasCategoryData
+                            ? ['#3b82f6', '#06b6d4', '#6366f1', '#14b8a6', '#8b5cf6', '#0ea5e9']
+                            : ['#cbd5e1'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: textColor,
+                                boxWidth: 12,
+                                padding: 12
+                            }
+                        }
+                    }
+                }
+            });
+        }).catch(err => console.error('Error fetching logs for analytics:', err));
+    }).catch(err => console.error('Error fetching tracks for analytics:', err));
 }
 
 function getSchedules() {
@@ -961,12 +1152,23 @@ function deleteSchedule(id) {
 }
 
 // Generate learning heatmap for a specific month
-function generateHeatmap(elementId, month, year) {
+function generateHeatmap(elementId, month, year, logs = null) {
     const element = document.getElementById(elementId);
     if (!element) return;
 
-    const logs = getStoredJSON('learningLogs', []);
+    if (!logs) {
+        logs = getStoredJSON('learningLogs', []);
+    }
     const logsByDate = {};
+
+    // Create a map of dates with their learning duration
+    logs.forEach(log => {
+        const logDate = new Date(log.date);
+        if (logDate.getMonth() + 1 === month && logDate.getFullYear() === year) {
+            const dateKey = logDate.getDate();
+            logsByDate[dateKey] = (logsByDate[dateKey] || 0) + log.duration;
+        }
+    });
 
     // Create a map of dates with their learning duration
     logs.forEach(log => {
@@ -1012,77 +1214,171 @@ function generateHeatmap(elementId, month, year) {
 
 // Display recent logs on dashboard
 function displayRecentLogs() {
-    const logs = getStoredJSON('learningLogs', []);
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
+
     const logsList = document.getElementById('logsList');
-    
     if (!logsList) return;
 
-    const recentLogs = logs.slice(-5).reverse();
+    fetch(API_BASE + `/users/${userId}/tracks`, {
+        headers: getAuthHeaders()
+    }).then(res => res.json()).then(tracks => {
+        const logPromises = tracks.map(track => 
+            fetch(API_BASE + `/logs/${track.id}`, { headers: getAuthHeaders() }).then(res => res.json())
+        );
 
-    if (recentLogs.length === 0) {
-        logsList.innerHTML = '<div class="no-logs">No learning logs yet. <a href="log.html">Add your first log</a></div>';
-        return;
-    }
+        Promise.all(logPromises).then(logsArrays => {
+            const allLogs = [];
+            logsArrays.forEach(logs => allLogs.push(...logs));
 
-    logsList.innerHTML = recentLogs.map(log => `
-        <div class="log-item">
-            <div class="log-header">
-                <span class="log-category">${log.category}</span>
-                <span class="log-date">${new Date(log.date).toLocaleDateString()}</span>
-            </div>
-            <div class="log-topic">${log.topic}</div>
-            <div class="log-duration">⏱️ ${log.duration} hours</div>
-            ${log.reflection ? `<div style="color: var(--text-light); margin-top: 0.5rem; font-size: 0.9rem;">💭 ${log.reflection.substring(0, 100)}...</div>` : ''}
-        </div>
-    `).join('');
+            allLogs.forEach(log => {
+                log.duration = log.minutes_spent / 60;
+                log.category = tracks.find(t => t.id === log.track_id)?.title || 'Other';
+                log.topic = log.notes || '';
+                log.reflection = '';
+            });
+
+            const recentLogs = allLogs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
+
+            if (recentLogs.length === 0) {
+                logsList.innerHTML = '<div class="no-logs">No learning logs yet. <a href="log.html">Add your first log</a></div>';
+                return;
+            }
+
+            logsList.innerHTML = recentLogs.map(log => `
+                <div class="log-item">
+                    <div class="log-header">
+                        <span class="log-category">${log.category}</span>
+                        <span class="log-date">${new Date(log.date).toLocaleDateString()}</span>
+                    </div>
+                    <div class="log-topic">${log.topic}</div>
+                    <div class="log-duration">⏱️ ${log.duration.toFixed(1)} hours</div>
+                </div>
+            `).join('');
+        }).catch(err => console.error('Error fetching recent logs:', err));
+    }).catch(err => console.error('Error fetching tracks:', err));
+}
+
+// Display today's learning plan with checkboxes
+function displayTodaysPlan() {
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
+
+    const planItems = document.getElementById('planItems');
+    if (!planItems) return;
+
+    const today = new Date().toISOString().split('T')[0];
+
+    fetch(API_BASE + `/users/${userId}/tracks`, {
+        headers: getAuthHeaders()
+    }).then(res => res.json()).then(tracks => {
+        const logPromises = tracks.map(track => 
+            fetch(API_BASE + `/logs/${track.id}`, { headers: getAuthHeaders() }).then(res => res.json())
+        );
+
+        Promise.all(logPromises).then(logsArrays => {
+            const allLogs = [];
+            logsArrays.forEach(logs => allLogs.push(...logs));
+
+            // Filter for today's logs
+            const todaysLogs = allLogs.filter(log => log.date === today);
+
+            if (todaysLogs.length === 0) {
+                planItems.innerHTML = '<p class="no-plan-items">No learning sessions logged for today yet. Start one now! 🚀</p>';
+                return;
+            }
+
+            planItems.innerHTML = todaysLogs.map((log, index) => `
+                <div class="plan-item" style="display: flex; align-items: center; padding: 0.5rem 0; gap: 0.8rem;">
+                    <input type="checkbox" id="plan-${log.id}" class="plan-checkbox" data-log-id="${log.id}" style="cursor: pointer;" ${log.completed ? 'checked' : ''}>
+                    <label for="plan-${log.id}" style="flex: 1; cursor: pointer; margin: 0;">
+                        ${log.notes || 'Learning Task'}
+                    </label>
+                    <span style="font-size: 0.85rem; color: var(--text-light);">⏱️ ${(log.minutes_spent / 60).toFixed(1)}h</span>
+                </div>
+            `).join('');
+
+            // Add event listeners to checkboxes
+            document.querySelectorAll('.plan-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', function() {
+                    const logId = this.getAttribute('data-log-id');
+                    if (this.checked) {
+                        completeLogAndStartChat(logId);
+                    }
+                });
+            });
+        }).catch(err => console.error('Error fetching today\'s plan:', err));
+    }).catch(err => console.error('Error fetching tracks for today\'s plan:', err));
 }
 
 // Display filtered logs on history page
 function displayFilteredLogs(category) {
-    const logs = getStoredJSON('learningLogs', []);
+    const userId = localStorage.getItem('userId');
+    if (!userId) return;
+
     const logsContainer = document.getElementById('logsContainer');
     const logCount = document.getElementById('logCount');
     
     if (!logsContainer) return;
 
-    let filteredLogs = logs;
-    if (category !== 'All') {
-        filteredLogs = logs.filter(log => log.category === category);
-    }
+    fetch(API_BASE + `/users/${userId}/tracks`, {
+        headers: getAuthHeaders()
+    }).then(res => res.json()).then(tracks => {
+        const logPromises = tracks.map(track => 
+            fetch(API_BASE + `/logs/${track.id}`, { headers: getAuthHeaders() }).then(res => res.json())
+        );
 
-    // Sort by date descending
-    filteredLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
+        Promise.all(logPromises).then(logsArrays => {
+            const allLogs = [];
+            logsArrays.forEach(logs => allLogs.push(...logs));
 
-    // Update log count
-    if (logCount) {
-        logCount.textContent = `${filteredLogs.length} ${filteredLogs.length === 1 ? 'log' : 'logs'}`;
-    }
+            allLogs.forEach(log => {
+                log.duration = log.minutes_spent / 60;
+                log.category = tracks.find(t => t.id === log.track_id)?.title || 'Other';
+                log.topic = log.notes || '';
+                log.reflection = '';
+            });
 
-    if (filteredLogs.length === 0) {
-        logsContainer.innerHTML = `
-            <div class="empty-state">
-                <img src="assets/No%20Data%20Yet.png" alt="No learning data yet" class="empty-state-image">
-                <div class="empty-icon">📖</div>
-                <p class="empty-message">No logs found for this category.</p>
-                <p class="empty-submessage">Start your learning journey today!</p>
-                <a href="log.html" class="btn-start-logging">Start Logging →</a>
-            </div>
-        `;
-        return;
-    }
+            let filteredLogs = allLogs;
+            if (category !== 'All') {
+                filteredLogs = allLogs.filter(log => log.category === category);
+            }
 
-    logsContainer.innerHTML = filteredLogs.map(log => `
-        <div class="log-item">
-            <div class="log-header">
-                <span class="log-category">${getCategoryIcon(log.category)} ${log.category}</span>
-                <span class="log-date">${new Date(log.date).toLocaleDateString()}</span>
-            </div>
-            <div class="log-topic">${log.topic}</div>
-            <div class="log-duration">⏱️ ${log.duration} hour${log.duration !== 1 ? 's' : ''}</div>
-            ${log.reflection ? `<div style="color: var(--text-light); margin-top: 0.8rem; font-size: 0.9rem;">💭 <strong>Reflection:</strong> ${log.reflection}</div>` : ''}
-            ${log.proof ? `<div style="color: var(--primary-color); margin-top: 0.5rem; font-size: 0.85rem;"><a href="${log.proof}" target="_blank" style="text-decoration: none; font-weight: 600;">🔗 View Proof</a></div>` : ''}
-        </div>
-    `).join('');
+            // Sort by date descending
+            filteredLogs.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            // Update log count
+            if (logCount) {
+                logCount.textContent = `${filteredLogs.length} ${filteredLogs.length === 1 ? 'log' : 'logs'}`;
+            }
+
+            if (filteredLogs.length === 0) {
+                logsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <img src="assets/No%20Data%20Yet.png" alt="No learning data yet" class="empty-state-image">
+                        <div class="empty-icon">📖</div>
+                        <p class="empty-message">No logs found for this category.</p>
+                        <p class="empty-submessage">Start your learning journey today!</p>
+                        <a href="log.html" class="btn-start-logging">Start Logging →</a>
+                    </div>
+                `;
+                return;
+            }
+
+            logsContainer.innerHTML = filteredLogs.map(log => `
+                <div class="log-item">
+                    <div class="log-header">
+                        <span class="log-category">${getCategoryIcon(log.category)} ${log.category}</span>
+                        <span class="log-date">${new Date(log.date).toLocaleDateString()}</span>
+                    </div>
+                    <div class="log-topic">${log.topic}</div>
+                    <div class="log-duration">⏱️ ${log.duration.toFixed(1)} hour${log.duration !== 1 ? 's' : ''}</div>
+                    ${log.reflection ? `<div style="color: var(--text-light); margin-top: 0.8rem; font-size: 0.9rem;">💭 <strong>Reflection:</strong> ${log.reflection}</div>` : ''}
+                    <button class="btn-chat-ai" onclick="openChatModal(${log.id})">🤖 Chat with AI</button>
+                </div>
+            `).join('');
+        }).catch(err => console.error('Error fetching logs for history:', err));
+    }).catch(err => console.error('Error fetching tracks for history:', err));
 }
 
 function getCategoryIcon(category) {
@@ -1528,43 +1824,208 @@ function loadCustomCategories() {
     `).join('');
 }
 
-function toggleCustomCategoryInput() {
-    const input = document.getElementById('customCategoryInput');
-    if (input) {
-        input.style.display = input.style.display === 'none' ? 'flex' : 'none';
-        if (input.style.display === 'flex') {
-            const nameInput = document.getElementById('customCategoryName');
-            if (nameInput) nameInput.focus();
+// Complete log and trigger AI interaction
+function completeLogAndStartChat(logId) {
+    fetch(API_BASE + `/logs/${logId}/complete`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+    }).then(res => res.json().then(data => ({ res, data })))
+      .then(({ res, data }) => {
+        if (res.ok) {
+            showToast('✅ Task completed! 🎉 AI Coach is ready to chat!');
+
+            // Open chat modal with AI response
+            openChatModal(logId);
+
+            // Display the initial AI response after a short delay
+            setTimeout(() => {
+                const messagesDiv = document.getElementById('chatMessages');
+                if (messagesDiv && data.ai_response) {
+                    // Remove welcome message
+                    const welcomeDiv = messagesDiv.querySelector('.chat-welcome');
+                    if (welcomeDiv) welcomeDiv.remove();
+
+                    // Add AI response
+                    const aiMessageDiv = document.createElement('div');
+                    aiMessageDiv.className = 'chat-message ai-message';
+                    aiMessageDiv.innerHTML = `
+                        <div class="message-avatar">
+                            <span class="avatar-icon">🤖</span>
+                        </div>
+                        <div class="message-content">
+                            <p>${data.ai_response}</p>
+                        </div>
+                    `;
+                    messagesDiv.appendChild(aiMessageDiv);
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }
+            }, 500);
+        } else {
+            showToast('❌ Error completing task: ' + (data.detail || 'Unknown error'));
         }
+    }).catch(err => {
+        console.error('Error completing log:', err);
+        showToast('❌ Network error while completing task');
+    });
+}
+
+function openChatModal(logId) {
+    // Create modal if not exists
+    let modal = document.getElementById('chatModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'chatModal';
+        modal.className = 'chat-modal-overlay';
+        modal.innerHTML = `
+            <div class="chat-modal">
+                <div class="chat-header">
+                    <div class="chat-header-content">
+                        <div class="chat-avatar">
+                            <span class="avatar-icon">🤖</span>
+                        </div>
+                        <div class="chat-info">
+                            <h3>AI Productivity Coach</h3>
+                            <span class="chat-status">Online</span>
+                        </div>
+                    </div>
+                    <button class="chat-close-btn" onclick="closeChatModal()">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="chat-messages" id="chatMessages">
+                    <div class="chat-welcome">
+                        <div class="welcome-message">
+                            <span class="welcome-icon">👋</span>
+                            <p>Hi! I'm your productivity coach. Let's reflect on your learning session together!</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-input-area">
+                    <div class="chat-input-container">
+                        <input type="text" id="chatInput" placeholder="Share your thoughts..." />
+                        <button class="chat-send-btn" onclick="sendChatMessage(${logId})">
+                            <span class="send-icon">📤</span>
+                        </button>
+                    </div>
+                    <div class="chat-typing-indicator" id="typingIndicator" style="display: none;">
+                        <div class="typing-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <span class="typing-text">AI is thinking...</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // Add enter key listener
+        setTimeout(() => {
+            const input = document.getElementById('chatInput');
+            if (input) {
+                input.addEventListener('keypress', function(e) {
+                    if (e.key === 'Enter') {
+                        sendChatMessage(logId);
+                    }
+                });
+            }
+        }, 100);
+    }
+    modal.style.display = 'flex';
+    document.getElementById('chatInput').focus();
+}
+
+function closeChatModal() {
+    const modal = document.getElementById('chatModal');
+    if (modal) {
+        modal.style.display = 'none';
     }
 }
 
-function addCustomCategory() {
-    const nameInput = document.getElementById('customCategoryName');
-    const categoryName = nameInput?.value?.trim();
-    
-    if (!categoryName) {
-        showToast('❌ Please enter a category name');
-        return;
-    }
-    
-    if (categoryName.length > 50) {
-        showToast('❌ Category name is too long (max 50 characters)');
-        return;
-    }
-    
-    const customCategories = getCustomCategories();
-    
-    if (customCategories.includes(categoryName)) {
-        showToast('❌ This category already exists');
-        return;
-    }
-    
-    customCategories.push(categoryName);
-    saveCustomCategories(customCategories);
-    nameInput.value = '';
-    toggleCustomCategoryInput();
-    showToast('✅ Category added successfully!');
+function sendChatMessage(logId) {
+    const input = document.getElementById('chatInput');
+    const message = input.value.trim();
+    if (!message) return;
+
+    const messagesDiv = document.getElementById('chatMessages');
+    const typingIndicator = document.getElementById('typingIndicator');
+
+    // Add user message
+    const userMessageDiv = document.createElement('div');
+    userMessageDiv.className = 'chat-message user-message';
+    userMessageDiv.innerHTML = `
+        <div class="message-content">
+            <p>${message}</p>
+        </div>
+        <div class="message-avatar">
+            <span class="avatar-icon">👤</span>
+        </div>
+    `;
+    messagesDiv.appendChild(userMessageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+    input.value = '';
+
+    // Show typing indicator
+    typingIndicator.style.display = 'flex';
+
+    fetch(API_BASE + `/chat/${logId}`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message })
+    }).then(res => res.json().then(data => ({ res, data })))
+      .then(({ res, data }) => {
+        // Hide typing indicator
+        typingIndicator.style.display = 'none';
+
+        if (res.ok) {
+            // Add AI response
+            const aiMessageDiv = document.createElement('div');
+            aiMessageDiv.className = 'chat-message ai-message';
+            aiMessageDiv.innerHTML = `
+                <div class="message-avatar">
+                    <span class="avatar-icon">🤖</span>
+                </div>
+                <div class="message-content">
+                    <p>${data.reply}</p>
+                </div>
+            `;
+            messagesDiv.appendChild(aiMessageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        } else {
+            // Add error message
+            const errorMessageDiv = document.createElement('div');
+            errorMessageDiv.className = 'chat-message ai-message error-message';
+            errorMessageDiv.innerHTML = `
+                <div class="message-avatar">
+                    <span class="avatar-icon">⚠️</span>
+                </div>
+                <div class="message-content">
+                    <p>Sorry, I encountered an error. Please try again.</p>
+                </div>
+            `;
+            messagesDiv.appendChild(errorMessageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+    }).catch(err => {
+        console.error('Chat error:', err);
+        typingIndicator.style.display = 'none';
+
+        // Add network error message
+        const errorMessageDiv = document.createElement('div');
+        errorMessageDiv.className = 'chat-message ai-message error-message';
+        errorMessageDiv.innerHTML = `
+            <div class="message-avatar">
+                <span class="avatar-icon">🔌</span>
+            </div>
+            <div class="message-content">
+                <p>Network error. Please check your connection and try again.</p>
+            </div>
+        `;
+        messagesDiv.appendChild(errorMessageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
 }
 
 // ==================== SETTINGS PAGE FUNCTIONS ====================

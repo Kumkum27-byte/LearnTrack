@@ -46,19 +46,11 @@ def start_ai_interaction(log, db: Session) -> str:
 
         You are an AI productivity reflection coach.
 
-        Ask exactly 3 short questions:
-
-        1️⃣ One question about what went well.
-        2️⃣ One question about a difficulty or distraction.
-        3️⃣ One question about improving tomorrow.
-
-        Keep total response under 80 words.
-        Sound supportive and natural.
-        Avoid robotic tone.
+        Ask ONLY 1 question about what went well during this session.
         
-        If the user shows progress, celebrate it.
-        If the user struggles, give a small actionable suggestion.
-        Never criticize.
+        Make it warm, encouraging, and specific to their session.
+        Keep it under 50 words.
+        Sound supportive and natural, avoid robotic tone.
         """
 
         ai_response = call_llm(prompt)
@@ -67,8 +59,7 @@ def start_ai_interaction(log, db: Session) -> str:
             log_id=log.id,
             user_id=track.user_id,
             role="assistant",
-            content=ai_response,
-            status="completed"
+            content=ai_response
         )
 
         db.add(conversation)
