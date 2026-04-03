@@ -2,7 +2,7 @@
 // ==================== LEARNTRACK APPLICATION ====================
 // Complete JavaScript for LearnTrack - Learning Management System
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://your-backend-api.com'; // Replace with your deployed backend URL
 
 function getAuthHeaders() {
     const token = localStorage.getItem('token');
