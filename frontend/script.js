@@ -2,7 +2,9 @@
 // ==================== LEARNTRACK APPLICATION ====================
 // Complete JavaScript for LearnTrack - Learning Management System
 
-const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:8000' : 'https://your-backend-api.com'; // Replace with your deployed backend URL
+const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:')
+    ? 'http://localhost:8000'
+    : window.location.origin;
 
 function getAuthHeaders() {
     const token = localStorage.getItem('token');
@@ -1903,7 +1905,7 @@ function openChatModal(logId) {
                 <div class="chat-input-area">
                     <div class="chat-input-container">
                         <input type="text" id="chatInput" placeholder="Share your thoughts..." />
-                        <button class="chat-send-btn" onclick="sendChatMessage(${logId})">
+                        <button class="chat-send-btn" onclick="sendChatMessage(window.currentLogId)">
                             <span class="send-icon">📤</span>
                         </button>
                     </div>
@@ -1926,12 +1928,89 @@ function openChatModal(logId) {
             if (input) {
                 input.addEventListener('keypress', function(e) {
                     if (e.key === 'Enter') {
-                        sendChatMessage(logId);
+                        sendChatMessage(window.currentLogId);
                     }
                 });
             }
         }, 100);
     }
+
+    // Store current logId globally
+    window.currentLogId = logId;
+    
+    // Load conversation history for this log
+    const messagesDiv = document.getElementById('chatMessages');
+    
+    // Show loading state
+    messagesDiv.innerHTML = `
+        <div class="chat-welcome">
+            <div class="welcome-message">
+                <span class="welcome-icon">⏳</span>
+                <p>Loading conversation...</p>
+            </div>
+        </div>
+    `;
+
+    // Fetch conversation history
+    fetch(API_BASE + `/chat/${logId}`, {
+        method: 'GET',
+        headers: getAuthHeaders()
+    }).then(res => res.json().then(data => ({ res, data })))
+      .then(({ res, data }) => {
+        if (res.ok && data.history && data.history.length > 0) {
+            // Clear loading state
+            messagesDiv.innerHTML = '';
+            
+            // Load conversation history
+            data.history.forEach(msg => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `chat-message ${msg.role === 'assistant' ? 'ai-message' : 'user-message'}`;
+                
+                if (msg.role === 'assistant') {
+                    messageDiv.innerHTML = `
+                        <div class="message-avatar">
+                            <span class="avatar-icon">🤖</span>
+                        </div>
+                        <div class="message-content">
+                            <p>${msg.content}</p>
+                        </div>
+                    `;
+                } else {
+                    messageDiv.innerHTML = `
+                        <div class="message-content">
+                            <p>${msg.content}</p>
+                        </div>
+                        <div class="message-avatar">
+                            <span class="avatar-icon">👤</span>
+                        </div>
+                    `;
+                }
+                messagesDiv.appendChild(messageDiv);
+            });
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        } else {
+            // No history yet - show welcome
+            messagesDiv.innerHTML = `
+                <div class="chat-welcome">
+                    <div class="welcome-message">
+                        <span class="welcome-icon">👋</span>
+                        <p>Hi! I'm your productivity coach. Let's reflect on your learning session together!</p>
+                    </div>
+                </div>
+            `;
+        }
+    }).catch(err => {
+        console.error('Error loading chat history:', err);
+        messagesDiv.innerHTML = `
+            <div class="chat-welcome">
+                <div class="welcome-message">
+                    <span class="welcome-icon">👋</span>
+                    <p>Hi! I'm your productivity coach. Let's reflect on your learning session together!</p>
+                </div>
+            </div>
+        `;
+    });
+    
     modal.style.display = 'flex';
     document.getElementById('chatInput').focus();
 }

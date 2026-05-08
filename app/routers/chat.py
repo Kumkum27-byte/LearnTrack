@@ -143,3 +143,28 @@ def chat_with_ai(log_id:int, request:ChatRequest, db: Session = Depends(get_db))
     db.commit()
 
     return{"reply": ai_reply}
+
+
+@router.get("/{log_id}")
+def get_chat_history(log_id: int, db: Session = Depends(get_db)):
+    """Fetch conversation history for a specific log"""
+    try:
+        history = db.query(AIConversation).filter(
+            AIConversation.log_id == log_id
+        ).order_by(AIConversation.created_at.asc()).all()
+        
+        return {
+            "history": [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "created_at": msg.created_at.isoformat() if msg.created_at else None
+                }
+                for msg in history
+            ]
+        }
+    except Exception as e:
+        return {
+            "history": [],
+            "error": str(e)
+        }
