@@ -34,44 +34,99 @@ def chat_with_ai(log_id:int, request:ChatRequest, db: Session = Depends(get_db))
     for msg in history:
         conversation_text += f"{msg.role}: {msg.content}\n"
 
+    # Get session data for context
+    from app.models.daily_log import DailyLog
+    from app.models.track import Track
+    log = db.query(DailyLog).filter(DailyLog.id == log_id).first()
+    track = db.query(Track).filter(Track.id == log.track_id).first() if log else None
+    
+    session_context = ""
+    if log and track:
+        session_context = f"Session: {track.title} for {log.minutes_spent} minutes. Notes: {log.notes or 'None'}"
+
     # Determine which question to ask based on conversation count
     if user_message_count == 1:
-        # Ask question 2: about difficulties
+        # Q2: Analyze their challenge answer, praise it, ask about what went well
         prompt = f"""
-        You are a productivity reflection coach.
-
-        Conversation history: {conversation_text}
-
-        The user has answered your first question about what went well.
-        Now ask ONLY 1 new question about a difficulty, distraction, or challenge they faced.
+        You are a RUTHLESS YET PRAISING productivity mentor.
         
-        Be empathetic and encouraging.
-        Keep it under 50 words.
+        Session: {session_context}
+        
+        Conversation so far:
+        {conversation_text}
+
+        ANALYSIS & NEXT QUESTION:
+        - They just told you about a challenge they faced
+        - Acknowledge what they said specifically (show you listened)
+        - Appreciate their honesty
+        - NOW ask ONE follow-up: What was something that actually went WELL or felt smooth during the session?
+        - Make it conversational, like a real coach digging deeper
+        - Keep it short (2-3 sentences max)
+        - Challenge them to find the win, even if small
+        
+        Example: "Okay, I hear you on the focus breaks thing - that's real. But flip it: what part of those {log.minutes_spent} minutes actually felt strong? Where did you find flow?"
         """
     elif user_message_count == 2:
-        # Ask question 3: about improvement
+        # Q3: Analyze both answers, praise growth awareness, ask about what they'd change
         prompt = f"""
-        You are a productivity reflection coach.
-
-        Conversation history: {conversation_text}
-
-        The user has answered two questions already.
-        Now ask ONLY 1 final question about one small thing they could adjust tomorrow to improve.
+        You are a RUTHLESS YET PRAISING productivity mentor.
         
-        Be supportive and actionable.
-        Keep it under 50 words.
+        Session: {session_context}
+        
+        Conversation so far:
+        {conversation_text}
+
+        ANALYSIS & NEXT QUESTION:
+        - They've told you about: (1) a challenge, (2) what went well
+        - They're showing honest self-awareness - that's good
+        - Praise the pattern you're seeing in their answers
+        - NOW ask ONE follow-up: What's ONE specific thing you'd change for tomorrow to make the next session even better?
+        - Make it practical and within their control
+        - Challenge them to be concrete (not vague)
+        - Keep it short (2-3 sentences max)
+        
+        Example: "Good - you're being real about what tripped you up and what clicked. Now the hard part: if you did this exact session again tomorrow, what ONE adjustment would make it tighter?"
+        """
+    elif user_message_count == 3:
+        # Q4: Deep dive - connect all answers, ask about mindset/consistency
+        prompt = f"""
+        You are a RUTHLESS YET PRAISING productivity mentor.
+        
+        Session: {session_context}
+        
+        Conversation so far:
+        {conversation_text}
+
+        ANALYSIS & NEXT QUESTION:
+        - They've shared their challenge, their win, and their improvement idea
+        - This is solid self-reflection - acknowledge the growth
+        - Praise their willingness to level up
+        - NOW ask the final pushback: What's ONE thing about your mindset or approach that needs to change to make THIS a consistent win, not a one-time thing?
+        - Make it about systems and habits, not willpower
+        - Challenge them to think bigger than tomorrow
+        - Keep it short (2-3 sentences max)
+        
+        Example: "You know what clicked, what didn't, and how to fix it. That's the awareness winners have. But here's the real question: what belief or routine change would make this the norm for you, not the exception?"
         """
     else:
-        # Continue conversation with support
+        # Closing: Synthesize everything, give actionable takeaway
         prompt = f"""
-        You are a productivity reflection coach.
-
-        Conversation history: {conversation_text}
-
-        The user is continuing the reflection conversation.
-        Provide supportive feedback, celebrate their progress, or give a brief actionable suggestion.
+        You are a RUTHLESS YET PRAISING productivity mentor giving final coaching.
         
-        Keep response under 60 words.
+        Session: {session_context}
+        
+        Conversation so far:
+        {conversation_text}
+
+        FINAL COACHING HIT:
+        - Synthesize what you've learned from this whole conversation
+        - Connect their challenge → their win → their improvement → their mindset shift
+        - Give them ONE specific, concrete action for their next session
+        - Make them feel challenged but capable
+        - Praise their willingness to dig deep and be honest
+        - Keep it powerful but brief (3-4 sentences max)
+        
+        Example: "Here's what I see: you know where you slip, where you shine, and how to improve. That's the mentality of someone who gets better. For tomorrow: [specific action]. Lock in. You've got this."
         """
 
     #call llm
